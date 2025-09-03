@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    allowedDevOrigins: ['*.replit.dev', '*.pike.replit.dev']
+  }
 };
 
 export default nextConfig;
