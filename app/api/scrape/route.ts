@@ -134,7 +134,7 @@ async function scrapeWithPuppeteer(fullUrl: string) {
 
     // Wait a bit for any dynamic content
     console.log('Waiting for dynamic content...');
-    await page.waitForTimeout(1500);
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     // Get the page content
     console.log('Getting page content...');
