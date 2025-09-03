@@ -93,8 +93,7 @@ export default function Onboarding() {
                 height: `${Math.random() * 4 + 2}px`,
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 2}s`
+                animation: `float ${3 + Math.random() * 4}s ease-in-out infinite ${Math.random() * 2}s`
               }}
             />
           ))}
@@ -131,8 +130,7 @@ export default function Onboarding() {
                   style={{
                     left: `${20 + (i % 3) * 30}%`,
                     top: `${i < 3 ? 20 : 70}%`,
-                    animation: `pulse ${1 + Math.random()}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.2}s`
+                    animation: `pulse ${1 + Math.random()}s ease-in-out infinite ${i * 0.2}s`
                   }}
                 />
               ))}
@@ -148,8 +146,9 @@ export default function Onboarding() {
                     y2="70%"
                     stroke="rgba(255, 107, 53, 0.3)"
                     strokeWidth="1"
-                    className="animate-pulse"
-                    style={{ animationDelay: `${i * 0.3}s` }}
+                    style={{ 
+                      animation: `pulse 2s ease-in-out infinite ${i * 0.3}s`
+                    }}
                   />
                 ))}
               </svg>

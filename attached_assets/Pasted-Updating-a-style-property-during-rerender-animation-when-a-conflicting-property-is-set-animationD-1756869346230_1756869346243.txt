@@ -1,0 +1,120 @@
+Updating a style property during rerender (animation) when a conflicting property is set (animationDelay) can lead to styling bugs. To avoid this, don't mix shorthand and non-shorthand properties for the same value; instead, replace the shorthand with separate values.
+
+app/page.tsx (128:17) @ eval
+
+
+  126 |               {/* Neural network nodes */}
+  127 |               {[...Array(6)].map((_, i) => (
+> 128 |                 <div
+      |                 ^
+  129 |                   key={i}
+  130 |                   className="absolute w-2 h-2 rounded-full bg-orange-400"
+  131 |                   style={{
+Call Stack
+55
+
+Hide 51 ignore-listed frame(s)
+createConsoleError
+node_modules/next/dist/next-devtools/shared/console-error.js (26:1)
+handleConsoleError
+node_modules/next/dist/next-devtools/userspace/app/errors/use-error-handler.js (50:1)
+console.error
+node_modules/next/dist/next-devtools/userspace/app/errors/intercept-console-error.js (55:1)
+setValueForStyles
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (2843:1)
+setProp
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (17822:1)
+updateProperties
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (18982:1)
+commitUpdate
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (19949:1)
+runWithFiberInDEV
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (871:1)
+commitHostUpdate
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (12730:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13856:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (14091:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13839:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13839:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13839:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13839:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (14091:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (14091:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13639:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13639:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13639:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+recursivelyTraverseMutationEffects
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13611:1)
+commitMutationEffectsOnFiber
+node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js (13623:1)
+div
+<anonymous>
+eval
+app/page.tsx (128:17)
