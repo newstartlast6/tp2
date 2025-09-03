@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
 
 // Multiple realistic user agents for rotation
 const USER_AGENTS = [
@@ -44,6 +46,125 @@ async function fetchWithHeaders(fullUrl: string) {
   });
 
   return response;
+}
+
+// Check if HTML content indicates a security checkpoint
+function isSecurityCheckpoint(html: string, title: string): { isCheckpoint: boolean; type: string; message: string } {
+  const lowerHtml = html.toLowerCase();
+  const lowerTitle = title.toLowerCase();
+  
+  // Common security checkpoint indicators
+  const checkpoints = [
+    {
+      patterns: ['vercel security checkpoint', 'failed to verify your browser', 'code 21'],
+      type: 'Vercel Security',
+      message: 'This website uses Vercel\'s security protection that blocks automated access. Try visiting the site directly in your browser first.'
+    },
+    {
+      patterns: ['cloudflare', 'checking your browser', 'please wait while we check your browser', 'ray id:', 'cf-ray'],
+      type: 'Cloudflare Protection',
+      message: 'This website uses Cloudflare\'s bot protection. The site may be temporarily blocking automated requests.'
+    },
+    {
+      patterns: ['security check', 'bot protection', 'automated requests', 'please verify you are human'],
+      type: 'Bot Protection',
+      message: 'This website has bot protection enabled that prevents automated access.'
+    },
+    {
+      patterns: ['access denied', 'forbidden', '403 forbidden'],
+      type: 'Access Denied',
+      message: 'Access to this website is currently restricted or blocked.'
+    },
+    {
+      patterns: ['rate limit', 'too many requests', '429'],
+      type: 'Rate Limited',
+      message: 'This website is rate limiting requests. Please try again later.'
+    }
+  ];
+  
+  for (const checkpoint of checkpoints) {
+    if (checkpoint.patterns.some(pattern => lowerHtml.includes(pattern) || lowerTitle.includes(pattern))) {
+      return {
+        isCheckpoint: true,
+        type: checkpoint.type,
+        message: checkpoint.message
+      };
+    }
+  }
+  
+  return { isCheckpoint: false, type: '', message: '' };
+}
+
+// Extract content using Mozilla Readability
+function extractWithReadability(html: string, url: string) {
+  try {
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    
+    if (article) {
+      return {
+        title: article.title || 'No title found',
+        content: article.textContent || article.content || 'No content found',
+        excerpt: article.excerpt || ''
+      };
+    }
+  } catch (error) {
+    console.log('Readability extraction failed:', error);
+  }
+  return null;
+}
+
+// Playwright fallback with better stealth capabilities
+async function scrapeWithPlaywright(fullUrl: string) {
+  console.log('Starting Playwright with URL:', fullUrl);
+  let browser;
+  try {
+    const { chromium } = await import('playwright');
+    
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=VizDisplayCompositor'
+      ]
+    });
+    
+    const context = await browser.newContext({
+      userAgent: getRandomUserAgent(),
+      viewport: { width: 1366, height: 768 },
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br'
+      }
+    });
+    
+    const page = await context.newPage();
+    
+    // Navigate with longer timeout
+    await page.goto(fullUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000 
+    });
+    
+    // Wait and simulate human behavior
+    await page.waitForTimeout(2000);
+    await page.mouse.move(100, 100);
+    await page.waitForTimeout(1000);
+    
+    const html = await page.content();
+    await browser.close();
+    
+    return html;
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    throw error;
+  }
 }
 
 // Puppeteer fallback for heavily protected sites
@@ -262,34 +383,36 @@ export async function POST(request: NextRequest) {
     let html;
     
     if (!response.ok) {
-      // If we got blocked, try Puppeteer as a fallback
+      // If we got blocked, try advanced scraping methods
       if ([403, 429, 503].includes(response.status)) {
         try {
-          console.log('Fetch blocked, trying Puppeteer fallback...');
-          html = await scrapeWithPuppeteer(fullUrl);
-          console.log('Puppeteer fallback succeeded');
-        } catch (puppeteerError) {
-          console.error('Puppeteer fallback failed:', puppeteerError);
-          console.error('Puppeteer error details:', {
-            message: puppeteerError instanceof Error ? puppeteerError.message : 'Unknown error',
-            stack: puppeteerError instanceof Error ? puppeteerError.stack : null
-          });
-          
-          let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
-          
-          if (response.status === 403) {
-            errorMessage = 'Access denied - this website has bot protection that we cannot bypass.';
-          } else if (response.status === 429) {
-            errorMessage = 'Rate limited - this website is protecting against automated requests.';
-          } else if (response.status === 503) {
-            errorMessage = 'Service unavailable - this website may be using Cloudflare protection.';
+          console.log('Fetch blocked, trying Playwright fallback...');
+          html = await scrapeWithPlaywright(fullUrl);
+          console.log('Playwright fallback succeeded');
+        } catch (playwrightError) {
+          console.log('Playwright failed, trying Puppeteer fallback...');
+          try {
+            html = await scrapeWithPuppeteer(fullUrl);
+            console.log('Puppeteer fallback succeeded');
+          } catch (puppeteerError) {
+            console.error('All scraping methods failed');
+            
+            let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
+            
+            if (response.status === 403) {
+              errorMessage = 'Access denied - this website has strong bot protection.';
+            } else if (response.status === 429) {
+              errorMessage = 'Rate limited - this website is protecting against automated requests.';
+            } else if (response.status === 503) {
+              errorMessage = 'Service unavailable - this website may be using advanced protection.';
+            }
+            
+            return NextResponse.json({ 
+              error: errorMessage,
+              suggestion: 'Try accessing the website directly in your browser first, then try again later.',
+              type: 'SCRAPING_BLOCKED'
+            }, { status: 400 });
           }
-          
-          return NextResponse.json({ 
-            error: errorMessage,
-            suggestion: 'Try accessing the website directly first, or try again later.',
-            debug: puppeteerError instanceof Error ? puppeteerError.message : 'Unknown puppeteer error'
-          }, { status: 400 });
         }
       } else {
         return NextResponse.json({ 
@@ -301,56 +424,90 @@ export async function POST(request: NextRequest) {
     }
     const $ = cheerio.load(html);
 
-    // Extract title
+    // Extract title for security checkpoint detection
     let title = $('title').text().trim() || 
                 $('h1').first().text().trim() || 
                 $('meta[property="og:title"]').attr('content') || 
                 'No title found';
 
-    // Extract description
-    let description = $('meta[name="description"]').attr('content') || 
-                      $('meta[property="og:description"]').attr('content') || 
-                      $('meta[name="twitter:description"]').attr('content') || 
-                      $('p').first().text().trim().substring(0, 300) || 
-                      'No description found';
+    // Check for security checkpoints
+    const checkpointResult = isSecurityCheckpoint(html, title);
+    
+    if (checkpointResult.isCheckpoint) {
+      console.log('Security checkpoint detected:', checkpointResult.type);
+      return NextResponse.json({
+        error: checkpointResult.message,
+        type: 'SECURITY_CHECKPOINT',
+        checkpointType: checkpointResult.type,
+        suggestion: 'This website has protection against automated requests. You may need to visit the site directly in your browser first.',
+        alternatives: [
+          'Try visiting the website directly in your browser',
+          'Wait a few minutes and try again',
+          'Check if the website has a public API for accessing content'
+        ]
+      }, { status: 400 });
+    }
 
-    // Extract main content - look for common content containers
-    const contentSelectors = [
-      'main',
-      '[role="main"]',
-      '.main-content',
-      '.content',
-      'article',
-      '.post-content',
-      '.entry-content',
-      '.page-content',
-      'section'
-    ];
+    // Try Mozilla Readability first for better content extraction
+    const readabilityResult = extractWithReadability(html, fullUrl);
+    
+    let description, content;
+    
+    if (readabilityResult && readabilityResult.content.length > 100) {
+      console.log('Using Readability extraction');
+      title = readabilityResult.title || title;
+      content = readabilityResult.content.substring(0, 2000);
+      description = readabilityResult.excerpt || 
+                   $('meta[name="description"]').attr('content') || 
+                   $('meta[property="og:description"]').attr('content') || 
+                   content.substring(0, 300);
+    } else {
+      console.log('Using fallback content extraction');
+      // Fallback to original extraction method
+      description = $('meta[name="description"]').attr('content') || 
+                    $('meta[property="og:description"]').attr('content') || 
+                    $('meta[name="twitter:description"]').attr('content') || 
+                    $('p').first().text().trim().substring(0, 300) || 
+                    'No description found';
 
-    let content = '';
-    for (const selector of contentSelectors) {
-      const element = $(selector).first();
-      if (element.length > 0) {
-        // Remove script and style tags
-        element.find('script, style, nav, header, footer, aside').remove();
-        content = element.text().trim();
-        if (content && content.length > 100) {
-          break;
+      // Extract main content - look for common content containers
+      const contentSelectors = [
+        'main',
+        '[role="main"]',
+        '.main-content',
+        '.content',
+        'article',
+        '.post-content',
+        '.entry-content',
+        '.page-content',
+        'section'
+      ];
+
+      content = '';
+      for (const selector of contentSelectors) {
+        const element = $(selector).first();
+        if (element.length > 0) {
+          // Remove script and style tags
+          element.find('script, style, nav, header, footer, aside').remove();
+          content = element.text().trim();
+          if (content && content.length > 100) {
+            break;
+          }
         }
       }
-    }
 
-    // Fallback: get all paragraph content if no main content found
-    if (!content || content.length < 100) {
-      const paragraphs = $('p').map((_, el) => $(el).text().trim()).get();
-      content = paragraphs.join(' ').substring(0, 1000);
-    }
+      // Fallback: get all paragraph content if no main content found
+      if (!content || content.length < 100) {
+        const paragraphs = $('p').map((_, el) => $(el).text().trim()).get();
+        content = paragraphs.join(' ').substring(0, 1000);
+      }
 
-    // Clean up content
-    content = content
-      .replace(/\s+/g, ' ')
-      .trim()
-      .substring(0, 2000) || 'No content found';
+      // Clean up content
+      content = content
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 2000) || 'No content found';
+    }
 
     // Clean up description
     description = description.substring(0, 500);
@@ -362,7 +519,8 @@ export async function POST(request: NextRequest) {
         title,
         description,
         content
-      }
+      },
+      extractionMethod: readabilityResult ? 'readability' : 'fallback'
     });
 
   } catch (error) {
