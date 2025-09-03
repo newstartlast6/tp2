@@ -1,25 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { chromium } from 'playwright';
 
-// Multiple realistic user agents for rotation
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
-];
-
-// Get random user agent
-function getRandomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
+// Single user agent to avoid appearing as an attack
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // Generate realistic browser headers
-function getBrowserHeaders(userAgent: string) {
+function getBrowserHeaders() {
   return {
-    'User-Agent': userAgent,
+    'User-Agent': USER_AGENT,
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
@@ -34,58 +22,27 @@ function getBrowserHeaders(userAgent: string) {
   };
 }
 
-// Enhanced fetch with retry logic
-async function fetchWithRetry(fullUrl: string, maxRetries = 3) {
-  let lastError;
+// Simple fetch function - try once with proper headers
+async function fetchWithHeaders(fullUrl: string) {
+  const headers = getBrowserHeaders();
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const userAgent = getRandomUserAgent();
-      const headers = getBrowserHeaders(userAgent);
-      
-      // Add some randomness between attempts
-      if (attempt > 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-      
-      const response = await fetch(fullUrl, {
-        headers,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(15000) // 15 second timeout
-      });
+  const response = await fetch(fullUrl, {
+    headers,
+    redirect: 'follow',
+    signal: AbortSignal.timeout(10000) // 10 second timeout
+  });
 
-      if (response.ok) {
-        return response;
-      }
-      
-      // If we get 403, 429, or 503, it might be bot protection
-      if ([403, 429, 503].includes(response.status)) {
-        lastError = new Error(`Bot protection detected (${response.status}): ${response.statusText}`);
-        continue;
-      }
-      
-      // For other errors, return the response to handle normally
-      return response;
-      
-    } catch (error) {
-      lastError = error;
-      console.log(`Attempt ${attempt} failed:`, error);
-      
-      // If it's a timeout or network error, retry
-      if (attempt < maxRetries) {
-        continue;
-      }
-    }
-  }
-  
-  throw lastError;
+  return response;
 }
 
-// Playwright fallback for heavily protected sites
-async function scrapeWithPlaywright(fullUrl: string) {
+// Puppeteer fallback for heavily protected sites
+async function scrapeWithPuppeteer(fullUrl: string) {
   let browser;
   try {
-    browser = await chromium.launch({
+    // Dynamic import based on environment (Replit vs production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    let puppeteer: any;
+    let launchOptions: any = {
       headless: true,
       args: [
         '--no-sandbox',
@@ -96,16 +53,39 @@ async function scrapeWithPlaywright(fullUrl: string) {
         '--no-zygote',
         '--disable-gpu'
       ]
-    });
+    };
 
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
-      locale: 'en-US',
-      timezoneId: 'America/New_York'
-    });
+    if (isProduction) {
+      // Use Sparticuz Chromium for production/Vercel
+      const chromium = (await import('@sparticuz/chromium')).default;
+      puppeteer = await import('puppeteer-core');
+      launchOptions = {
+        ...launchOptions,
+        args: [...launchOptions.args, ...chromium.args],
+        executablePath: await chromium.executablePath(),
+      };
+    } else {
+      // Use puppeteer-core for development
+      puppeteer = await import('puppeteer-core');
+      // Try to find Chrome/Chromium executable
+      try {
+        launchOptions.executablePath = '/usr/bin/google-chrome-stable';
+      } catch {
+        try {
+          launchOptions.executablePath = '/usr/bin/chromium-browser';
+        } catch {
+          // Fallback to system default
+          delete launchOptions.executablePath;
+        }
+      }
+    }
 
-    const page = await context.newPage();
+    browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
+    
+    // Set user agent and viewport
+    await page.setUserAgent(USER_AGENT);
+    await page.setViewport({ width: 1920, height: 1080 });
     
     // Set additional headers
     await page.setExtraHTTPHeaders({
@@ -117,11 +97,11 @@ async function scrapeWithPlaywright(fullUrl: string) {
     // Navigate with timeout
     await page.goto(fullUrl, { 
       waitUntil: 'domcontentloaded',
-      timeout: 30000 
+      timeout: 20000 
     });
 
     // Wait a bit for any dynamic content
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
 
     // Get the page content
     const html = await page.content();
@@ -151,47 +131,34 @@ export async function POST(request: NextRequest) {
       fullUrl = `https://${url}`;
     }
 
-    // Try to fetch with enhanced retry logic
+    // Try to fetch with proper headers
     let response;
     try {
-      response = await fetchWithRetry(fullUrl);
+      response = await fetchWithHeaders(fullUrl);
     } catch (error) {
-      // If all retries failed, try a simpler approach
-      console.log('Enhanced fetch failed, trying simple fetch:', error);
-      
-      try {
-        response = await fetch(fullUrl, {
-          headers: {
-            'User-Agent': 'TractionPilot-Bot/1.0 (+https://tractionpilot.com/bot)'
-          },
-          redirect: 'follow',
-          signal: AbortSignal.timeout(10000)
-        });
-      } catch (simpleError) {
-        return NextResponse.json({ 
-          error: 'Unable to access this website. It may have bot protection or be unreachable. Please check the URL or try a different site.',
-          details: error instanceof Error ? error.message : 'Network error'
-        }, { status: 400 });
-      }
+      return NextResponse.json({ 
+        error: 'Unable to access this website. It may be unreachable or have connection issues. Please check the URL and try again.',
+        details: error instanceof Error ? error.message : 'Network error'
+      }, { status: 400 });
     }
 
     let html;
     
     if (!response.ok) {
-      // If we got blocked, try Playwright as a last resort
+      // If we got blocked, try Puppeteer as a fallback
       if ([403, 429, 503].includes(response.status)) {
         try {
-          console.log('Fetch blocked, trying Playwright fallback...');
-          html = await scrapeWithPlaywright(fullUrl);
-        } catch (playwrightError) {
+          console.log('Fetch blocked, trying Puppeteer fallback...');
+          html = await scrapeWithPuppeteer(fullUrl);
+        } catch (puppeteerError) {
           let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
           
           if (response.status === 403) {
-            errorMessage = 'Access denied - this website has strong bot protection that we cannot bypass.';
+            errorMessage = 'Access denied - this website has bot protection that we cannot bypass.';
           } else if (response.status === 429) {
-            errorMessage = 'Rate limited - this website is heavily protecting against automated requests.';
+            errorMessage = 'Rate limited - this website is protecting against automated requests.';
           } else if (response.status === 503) {
-            errorMessage = 'Service unavailable - this website is using advanced protection like Cloudflare.';
+            errorMessage = 'Service unavailable - this website may be using Cloudflare protection.';
           }
           
           return NextResponse.json({ 

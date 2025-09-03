@@ -1,0 +1,225 @@
+Deploying Puppeteer with Next.js on Vercel
+This guide covers setting up Puppeteer with Next.js on Vercel for headless browser automation, featuring a practical example for generating web page screenshots efficiently.
+Copy page
+Last updated July 24, 2025
+Frameworks
+Puppeteer is a powerful Node.js library that provides a high-level API to control headless Chrome or Chromium. It's incredibly useful for automating browser tasks like generating screenshots, creating PDFs, and scraping websites. Running Puppeteer in a serverless environment like Vercel, however, requires specific configuration to work within the platform's constraints.
+
+This guide provides a general walkthrough for deploying a Next.js application with Puppeteer to Vercel. We will use a screenshot generator as a practical example to demonstrate the key concepts.
+
+Prerequisites
+A Vercel account.
+Node.js and npm (or a similar package manager) installed on your local machine.
+Basic knowledge of Next.js and TypeScript.
+Key Concepts for Puppeteer on Vercel
+To successfully run Puppeteer in a Vercel Function, you must address the function bundle size limitation (250MB). The standard puppeteer package is too large. The solution involves two key packages:
+
+puppeteer-core: A lightweight version of Puppeteer that doesn't bundle its own browser.
+@sparticuz/chromium: A minimal, community-maintained version of Chromium that is small enough to fit within Vercel's limits.
+Step 1: Project Setup
+First, create a new Next.js project and install the necessary dependencies.
+
+
+npx create-next-app@latest puppeteer-on-vercel --typescript --tailwind
+Now, install the specialized packages for running Puppeteer in a serverless environment and the default puppeteer package for local development:
+
+
+npm install puppeteer-core @sparticuz/chromium
+npm install -D puppeteer
+Step 2: Example Implementation: A Screenshot API
+To demonstrate how to use Puppeteer, we'll create an API route that takes a screenshot of a given URL.
+
+This example showcases the core logic you would adapt for other Puppeteer tasks like PDF generation or web scraping. Create a new file at app/api/screenshot/route.ts:
+
+app/api/screenshot/route.ts
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const urlParam = searchParams.get("url");
+  if (!urlParam) {
+    return new NextResponse("Please provide a URL.", { status: 400 });
+  }
+
+  // Prepend http:// if missing
+  let inputUrl = urlParam.trim();
+  if (!/^https?:\/\//i.test(inputUrl)) {
+    inputUrl = `http://${inputUrl}`;
+  }
+
+  // Validate the URL is a valid HTTP/HTTPS URL
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(inputUrl);
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return new NextResponse("URL must start with http:// or https://", {
+        status: 400,
+      });
+    }
+  } catch {
+    return new NextResponse("Invalid URL provided.", { status: 400 });
+  }
+
+  let browser;
+  try {
+    const isVercel = !!process.env.VERCEL_ENV;
+    let puppeteer: any,
+      launchOptions: any = {
+        headless: true,
+      };
+
+    if (isVercel) {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      puppeteer = await import("puppeteer-core");
+      launchOptions = {
+        ...launchOptions,
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+      };
+    } else {
+      puppeteer = await import("puppeteer");
+    }
+
+    browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
+    await page.goto(parsedUrl.toString(), { waitUntil: "networkidle2" });
+    const screenshot = await page.screenshot({ type: "png" });
+    return new NextResponse(screenshot, {
+      headers: {
+        "Content-Type": "image/png",
+        "Content-Disposition": 'inline; filename="screenshot.png"',
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return new NextResponse(
+      "An error occurred while generating the screenshot.",
+      { status: 500 }
+    );
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+This API route dynamically loads the correct Puppeteer and Chromium packages based on the environment.
+
+Step 3: Building a Frontend for the Example
+To interact with our API, let's create a simple frontend. Replace the content of app/page.tsx:
+
+app/page.tsx
+
+"use client";
+
+import { useState } from "react";
+
+export default function HomePage() {
+  const [url, setUrl] = useState("");
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScreenshot = async () => {
+    if (!url) {
+      setError("Please enter a valid URL.");
+      return;
+    }
+    // Client-side URL validation: must start with http:// or https:// and be a valid URL
+    if (!/^https?:\/\//i.test(url.trim())) {
+      setError("URL must start with http:// or https://");
+      return;
+    }
+    try {
+      new URL(url.trim());
+    } catch {
+      setError("Invalid URL format. Please enter a valid URL.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setScreenshot(null);
+
+    try {
+      const response = await fetch(
+        `/api/screenshot?url=${encodeURIComponent(url)}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to capture screenshot.");
+      }
+      const blob = await response.blob();
+      setScreenshot(URL.createObjectURL(blob));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-50">
+      <div className="w-full max-w-2xl text-center">
+        <h1 className="text-4xl font-bold mb-4 text-gray-800">
+          Puppeteer on Vercel
+        </h1>
+        <p className="text-lg text-gray-600 mb-8">
+          Enter a URL below to generate a screenshot using Puppeteer running in
+          a Vercel Function.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://vercel.com"
+            className="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black focus:outline-none"
+          />
+          <button
+            onClick={handleScreenshot}
+            disabled={loading}
+            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+          >
+            {loading ? "Capturing..." : "Capture"}
+          </button>
+        </div>
+        {error && <p className="text-red-500 mt-4">{error}</p>}
+        {screenshot && (
+          <div className="mt-8 border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+            <h2 className="text-2xl font-semibold p-4 bg-gray-100 border-b text-black">
+              Screenshot Preview
+            </h2>
+            <img
+              src={screenshot || "/placeholder.svg"}
+              alt="Website screenshot"
+              className="w-full"
+            />
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+Step 4: Vercel Configuration
+To ensure Puppeteer runs correctly when deployed, you need to configure Next.js.
+
+Update your next.config.mjs file. The serverExternalPackages option tells Next.js not to bundle these packages, as they will be provided in the Node.js runtime environment.
+
+next.config.mjs
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // The `serverExternalPackages` option allows you to opt-out of bundling dependencies in your Server Components.
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+};
+
+export default nextConfig;
+
+Step 5: Deploy to Vercel
+You are now ready to deploy your application to Vercel. Connect your Git repository to Vercel or use the Vercel CLI.
+
+Once deployed, you'll have a Next.js application that can successfully run Puppeteer tasks on Vercel's serverless infrastructure. You can adapt the API route logic for any browser automation you need.
