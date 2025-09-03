@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ScrapedData {
   url: string;
@@ -14,6 +14,34 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
+  const [thinkingStep, setThinkingStep] = useState(0);
+  const [thinkingText, setThinkingText] = useState("");
+
+  const thinkingMessages = [
+    "Analyzing your website...",
+    "Extracting content structure...",
+    "Processing page metadata...",
+    "Understanding your design...",
+    "Evaluating user experience...",
+    "Finalizing analysis..."
+  ];
+
+  useEffect(() => {
+    if (loading) {
+      setThinkingStep(0);
+      setThinkingText(thinkingMessages[0]);
+      
+      const interval = setInterval(() => {
+        setThinkingStep((prev) => {
+          const next = (prev + 1) % thinkingMessages.length;
+          setThinkingText(thinkingMessages[next]);
+          return next;
+        });
+      }, 1500);
+
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +73,167 @@ export default function Onboarding() {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center text-white font-[family-name:var(--font-geist-sans)] p-5 overflow-hidden" 
+           style={{
+             background: "radial-gradient(ellipse at center, #3a1a00 0%, #2a1500 25%, #1f0f00 50%, #150a00 75%, #0a0500 100%)"
+           }}>
+        
+        {/* Animated Background Particles */}
+        <div className="absolute inset-0 overflow-hidden">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full opacity-20"
+              style={{
+                background: "linear-gradient(45deg, #ff6b35, #f7931e)",
+                width: `${Math.random() * 4 + 2}px`,
+                height: `${Math.random() * 4 + 2}px`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
+                animationDelay: `${Math.random() * 2}s`
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="relative z-10 text-center max-w-[600px] w-full">
+          {/* Pulsing Gentura Logo */}
+          <div className="mb-8 flex justify-center">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold text-white animate-pulse"
+                   style={{
+                     background: "linear-gradient(45deg, #ff6b35, #f7931e)",
+                     animation: "pulse 2s ease-in-out infinite"
+                   }}>
+                G
+              </div>
+              
+              {/* Rotating rings around logo */}
+              <div className="absolute inset-0 rounded-2xl border-2 border-orange-400/30 animate-spin"
+                   style={{ animation: "spin 3s linear infinite" }}></div>
+              <div className="absolute inset-2 rounded-xl border border-orange-300/20 animate-spin"
+                   style={{ animation: "spin 4s linear infinite reverse" }}></div>
+            </div>
+          </div>
+
+          {/* AI Brain Animation */}
+          <div className="mb-8 flex justify-center">
+            <div className="relative w-32 h-16">
+              {/* Neural network nodes */}
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-2 rounded-full bg-orange-400"
+                  style={{
+                    left: `${20 + (i % 3) * 30}%`,
+                    top: `${i < 3 ? 20 : 70}%`,
+                    animation: `pulse ${1 + Math.random()}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.2}s`
+                  }}
+                />
+              ))}
+              
+              {/* Connecting lines */}
+              <svg className="absolute inset-0 w-full h-full">
+                {[...Array(5)].map((_, i) => (
+                  <line
+                    key={i}
+                    x1={`${25 + (i % 2) * 30}%`}
+                    y1="30%"
+                    x2={`${35 + ((i + 1) % 2) * 30}%`}
+                    y2="70%"
+                    stroke="rgba(255, 107, 53, 0.3)"
+                    strokeWidth="1"
+                    className="animate-pulse"
+                    style={{ animationDelay: `${i * 0.3}s` }}
+                  />
+                ))}
+              </svg>
+            </div>
+          </div>
+
+          {/* Dynamic thinking text */}
+          <h2 className="text-3xl font-light mb-4 tracking-[-0.02em]">
+            AI Agent Analyzing
+          </h2>
+          
+          <div className="mb-8">
+            <p className="text-xl text-white/80 mb-2 transition-all duration-300">
+              {thinkingText}
+            </p>
+            
+            {/* Progress dots */}
+            <div className="flex justify-center gap-2 mb-4">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    i <= thinkingStep ? 'bg-orange-400' : 'bg-white/20'
+                  }`}
+                  style={{
+                    animation: i <= thinkingStep ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Animated processing bars */}
+          <div className="max-w-[300px] mx-auto space-y-3">
+            {['Content Structure', 'Page Design', 'User Experience'].map((label, i) => (
+              <div key={label} className="relative">
+                <div className="flex justify-between text-sm text-white/60 mb-1">
+                  <span>{label}</span>
+                  <span className="text-orange-400">
+                    {Math.min(100, (thinkingStep + 1) * 16 + i * 5)}%
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full"
+                     style={{ background: "rgba(255, 255, 255, 0.1)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-1000 ease-out"
+                    style={{
+                      background: "linear-gradient(90deg, #ff6b35, #f7931e)",
+                      width: `${Math.min(100, (thinkingStep + 1) * 16 + i * 5)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* URL being analyzed */}
+          <div className="mt-8 p-4 rounded-lg border border-white/20"
+               style={{
+                 background: "rgba(255, 255, 255, 0.05)",
+                 backdropFilter: "blur(10px)"
+               }}>
+            <p className="text-sm text-white/60 mb-1">Analyzing:</p>
+            <p className="text-orange-300 font-mono break-all">{url}</p>
+          </div>
+        </div>
+
+        <style jsx>{`
+          @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center text-white font-[family-name:var(--font-geist-sans)] p-5" 
@@ -88,17 +277,13 @@ export default function Onboarding() {
               background: "linear-gradient(45deg, #ff6b35, #f7931e)"
             }}
           >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <div className="w-0 h-0 ml-[2px]" 
-                   style={{
-                     borderLeft: "8px solid white",
-                     borderTop: "6px solid transparent",
-                     borderBottom: "6px solid transparent"
-                   }}>
-              </div>
-            )}
+            <div className="w-0 h-0 ml-[2px]" 
+                 style={{
+                   borderLeft: "8px solid white",
+                   borderTop: "6px solid transparent",
+                   borderBottom: "6px solid transparent"
+                 }}>
+            </div>
           </button>
         </form>
 
