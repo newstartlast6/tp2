@@ -79,9 +79,29 @@ async function scrapeWithPuppeteer(fullUrl: string) {
       };
       console.log('Vercel launch options:', launchOptions);
     } else {
-      // Use regular puppeteer for development (it includes its own browser)
-      console.log('Using regular puppeteer for development...');
-      puppeteer = await import('puppeteer');
+      // Use puppeteer-core with system Chromium for development
+      console.log('Using puppeteer-core with system Chromium for development...');
+      puppeteer = await import('puppeteer-core');
+      
+      // Use the system Chromium we installed via Nix
+      const { execSync } = await import('child_process');
+      try {
+        const chromiumPath = execSync('which chromium', { encoding: 'utf-8' }).trim();
+        launchOptions.executablePath = chromiumPath;
+        console.log('Found system Chromium at:', chromiumPath);
+      } catch (e) {
+        console.log('System Chromium not found, will try to find manually');
+        // Fallback to manual search
+        try {
+          const nixChromium = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
+          if (nixChromium) {
+            launchOptions.executablePath = nixChromium;
+            console.log('Found Nix Chromium at:', nixChromium);
+          }
+        } catch (e2) {
+          console.log('Could not find any Chromium installation');
+        }
+      }
       console.log('Development launch options:', launchOptions);
     }
 
