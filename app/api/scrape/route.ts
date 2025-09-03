@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { chromium } from 'playwright';
 
 // Multiple realistic user agents for rotation
 const USER_AGENTS = [
@@ -80,6 +81,62 @@ async function fetchWithRetry(fullUrl: string, maxRetries = 3) {
   throw lastError;
 }
 
+// Playwright fallback for heavily protected sites
+async function scrapeWithPlaywright(fullUrl: string) {
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
+    });
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 },
+      locale: 'en-US',
+      timezoneId: 'America/New_York'
+    });
+
+    const page = await context.newPage();
+    
+    // Set additional headers
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    });
+
+    // Navigate with timeout
+    await page.goto(fullUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000 
+    });
+
+    // Wait a bit for any dynamic content
+    await page.waitForTimeout(2000);
+
+    // Get the page content
+    const html = await page.content();
+    
+    await browser.close();
+    return html;
+    
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();
@@ -118,23 +175,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let html;
+    
     if (!response.ok) {
-      let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
-      
-      if (response.status === 403) {
-        errorMessage = 'Access denied - this website has bot protection enabled. Try accessing the site directly first.';
-      } else if (response.status === 429) {
-        errorMessage = 'Rate limited - this website is currently blocking automated requests. Please try again later.';
-      } else if (response.status === 503) {
-        errorMessage = 'Service unavailable - this website may be using Cloudflare or similar protection.';
+      // If we got blocked, try Playwright as a last resort
+      if ([403, 429, 503].includes(response.status)) {
+        try {
+          console.log('Fetch blocked, trying Playwright fallback...');
+          html = await scrapeWithPlaywright(fullUrl);
+        } catch (playwrightError) {
+          let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
+          
+          if (response.status === 403) {
+            errorMessage = 'Access denied - this website has strong bot protection that we cannot bypass.';
+          } else if (response.status === 429) {
+            errorMessage = 'Rate limited - this website is heavily protecting against automated requests.';
+          } else if (response.status === 503) {
+            errorMessage = 'Service unavailable - this website is using advanced protection like Cloudflare.';
+          }
+          
+          return NextResponse.json({ 
+            error: errorMessage,
+            suggestion: 'Try accessing the website directly first, or try again later.'
+          }, { status: 400 });
+        }
+      } else {
+        return NextResponse.json({ 
+          error: `Failed to fetch URL: ${response.status} ${response.statusText}` 
+        }, { status: 400 });
       }
-      
-      return NextResponse.json({ 
-        error: errorMessage 
-      }, { status: 400 });
+    } else {
+      html = await response.text();
     }
-
-    const html = await response.text();
     const $ = cheerio.load(html);
 
     // Extract title
