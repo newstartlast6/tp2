@@ -72,19 +72,44 @@ async function scrapeWithPuppeteer(fullUrl: string) {
       // Use puppeteer-core for development
       console.log('Setting up puppeteer-core for development...');
       puppeteer = await import('puppeteer-core');
-      // Try to find Chrome/Chromium executable
-      try {
-        launchOptions.executablePath = '/usr/bin/google-chrome-stable';
-        console.log('Using google-chrome-stable');
-      } catch {
+      
+      // Check for available browsers in Replit environment
+      const fs = await import('fs');
+      const possiblePaths = [
+        '/nix/store/*/bin/chromium',  // Nix store path
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome'
+      ];
+      
+      let foundPath = null;
+      for (const path of possiblePaths) {
         try {
-          launchOptions.executablePath = '/usr/bin/chromium-browser';
-          console.log('Using chromium-browser');
-        } catch {
-          // Fallback to system default
-          console.log('Using system default browser');
-          delete launchOptions.executablePath;
+          if (path.includes('*')) {
+            // Handle Nix store path with wildcard
+            const { execSync } = await import('child_process');
+            const result = execSync('find /nix/store -name chromium -type f 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
+            if (result && fs.existsSync(result)) {
+              foundPath = result;
+              break;
+            }
+          } else if (fs.existsSync(path)) {
+            foundPath = path;
+            break;
+          }
+        } catch (e) {
+          // Continue searching
         }
+      }
+      
+      if (foundPath) {
+        launchOptions.executablePath = foundPath;
+        console.log('Found browser at:', foundPath);
+      } else {
+        console.log('No browser found, will try system default');
+        // Remove executablePath to let puppeteer find it
+        delete launchOptions.executablePath;
       }
       console.log('Development launch options:', launchOptions);
     }
