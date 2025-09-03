@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// Single user agent to avoid appearing as an attack
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+// Multiple realistic user agents for rotation
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+];
+
+// Get random user agent
+function getRandomUserAgent() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
 
 // Generate realistic browser headers
 function getBrowserHeaders() {
@@ -111,36 +122,92 @@ async function scrapeWithPuppeteer(fullUrl: string) {
     console.log('Creating new page...');
     const page = await browser.newPage();
     
-    // Set user agent and viewport
+    // Set random user agent and realistic viewport
+    const randomUserAgent = getRandomUserAgent();
     console.log('Setting user agent and viewport...');
-    await page.setUserAgent(USER_AGENT);
-    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(randomUserAgent);
+    await page.setViewport({ 
+      width: 1366 + Math.floor(Math.random() * 200), 
+      height: 768 + Math.floor(Math.random() * 200) 
+    });
     
-    // Set additional headers
+    // Set additional headers with more realistic values
     console.log('Setting extra headers...');
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1'
     });
 
     // Navigate with timeout and better wait conditions
     console.log('Navigating to URL:', fullUrl);
     await page.goto(fullUrl, { 
-      waitUntil: 'networkidle0', // Wait for network to be idle
+      waitUntil: 'domcontentloaded',
       timeout: 30000 
     });
     console.log('Navigation completed');
 
-    // Wait for any security challenges to resolve
-    console.log('Waiting for security challenges and dynamic content...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Human-like behavior: random delays and mouse movements
+    console.log('Simulating human-like behavior...');
+    const randomDelay = Math.floor(Math.random() * 2000) + 1000;
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
     
-    // Check if we hit a security checkpoint and wait longer if needed
-    const pageContent = await page.content();
+    // Random mouse movements
+    await page.mouse.move(
+      Math.floor(Math.random() * 400) + 100, 
+      Math.floor(Math.random() * 300) + 100
+    );
+    
+    // Random scroll
+    await page.evaluate(() => {
+      window.scrollTo(0, Math.floor(Math.random() * 200) + 50);
+    });
+    
+    // Wait a bit more
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if we hit a security checkpoint
+    let pageContent = await page.content();
     if (pageContent.includes('Security Checkpoint') || pageContent.includes('verify your browser') || pageContent.includes('Checking your browser')) {
-      console.log('Detected security checkpoint, waiting longer...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      console.log('Detected security checkpoint, trying to bypass...');
+      
+      // More human-like interactions
+      await page.mouse.move(200, 300);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Try scrolling down and up
+      await page.evaluate(() => {
+        window.scrollTo(0, 300);
+      });
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      await page.evaluate(() => {
+        window.scrollTo(0, 0);
+      });
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Click somewhere random (but safe)
+      try {
+        await page.mouse.click(400, 400);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (e) {
+        console.log('Click failed, continuing...');
+      }
+      
+      // Wait for potential redirect or content change
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check if content changed
+      pageContent = await page.content();
+      if (pageContent.includes('Security Checkpoint')) {
+        console.log('Still on security checkpoint, waiting longer...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
     }
 
     // Get the page content
