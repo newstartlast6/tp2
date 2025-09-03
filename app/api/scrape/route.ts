@@ -167,7 +167,277 @@ async function scrapeWithPlaywright(fullUrl: string) {
   }
 }
 
-// Puppeteer fallback for heavily protected sites
+// Enhanced Puppeteer with stealth plugin for bypassing protection
+async function scrapeWithPuppeteerStealth(fullUrl: string) {
+  console.log('Starting Puppeteer Stealth with URL:', fullUrl);
+  let browser;
+  try {
+    // Use environment detection like in the Vercel guide
+    const isVercel = !!process.env.VERCEL_ENV;
+    console.log('Environment - isVercel:', isVercel);
+    
+    // Use puppeteer-extra with stealth plugin
+    const puppeteerExtra = await import('puppeteer-extra');
+    const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default;
+    
+    // Add stealth plugin to hide automation
+    puppeteerExtra.default.use(StealthPlugin());
+    
+    let puppeteer: any = puppeteerExtra.default;
+    let launchOptions: any = {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-field-trial-config',
+        '--disable-background-networking',
+        '--disable-client-side-phishing-detection',
+        '--disable-sync',
+        '--disable-translate',
+        '--disable-ipc-flooding-protection',
+        // Additional stealth arguments
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-extensions-except',
+        '--disable-extensions',
+        '--no-default-browser-check',
+        '--disable-default-apps',
+        '--disable-background-networking'
+      ]
+    };
+
+    if (isVercel) {
+      // Use Sparticuz Chromium for production/Vercel with stealth
+      console.log('Loading Sparticuz Chromium for Vercel with stealth...');
+      const chromium = (await import('@sparticuz/chromium')).default;
+      launchOptions = {
+        ...launchOptions,
+        args: [...launchOptions.args, ...chromium.args],
+        executablePath: await chromium.executablePath(),
+      };
+      console.log('Vercel stealth launch options:', launchOptions);
+    } else {
+      // Use system Chromium for development with stealth
+      console.log('Using system Chromium for development with stealth...');
+      
+      // Use the system Chromium we installed via Nix
+      const { execSync } = await import('child_process');
+      try {
+        const chromiumPath = execSync('which chromium', { encoding: 'utf-8' }).trim();
+        launchOptions.executablePath = chromiumPath;
+        console.log('Found system Chromium at:', chromiumPath);
+      } catch (e) {
+        console.log('System Chromium not found, will try to find manually');
+        // Fallback to manual search
+        try {
+          const nixChromium = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
+          if (nixChromium) {
+            launchOptions.executablePath = nixChromium;
+            console.log('Found Nix Chromium at:', nixChromium);
+          }
+        } catch (e2) {
+          console.log('Could not find any Chromium installation');
+        }
+      }
+      console.log('Development stealth launch options:', launchOptions);
+    }
+
+    console.log('Launching stealth browser...');
+    browser = await puppeteer.launch(launchOptions);
+    console.log('Stealth browser launched successfully');
+    console.log('Creating new page with enhanced stealth...');
+    const page = await browser.newPage();
+    
+    // Enhanced stealth measures
+    await page.evaluateOnNewDocument(() => {
+      // Remove webdriver property
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+      
+      // Mock chrome runtime
+      (window as any).chrome = {
+        runtime: {}
+      };
+      
+      // Mock permissions
+      Object.defineProperty(navigator, 'permissions', {
+        get: () => ({
+          query: () => Promise.resolve({ state: 'granted' })
+        })
+      });
+      
+      // Mock plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+          {
+            0: {
+              type: "application/x-google-chrome-pdf",
+              suffixes: "pdf",
+              description: "Portable Document Format"
+            },
+            description: "Portable Document Format",
+            filename: "internal-pdf-viewer",
+            length: 1,
+            name: "Chrome PDF Plugin"
+          }
+        ]
+      });
+    });
+    
+    // Set random user agent and realistic viewport
+    const randomUserAgent = getRandomUserAgent();
+    console.log('Setting enhanced user agent and viewport...');
+    await page.setUserAgent(randomUserAgent);
+    
+    // More realistic viewport variations
+    const viewports = [
+      { width: 1920, height: 1080 },
+      { width: 1366, height: 768 },
+      { width: 1536, height: 864 },
+      { width: 1440, height: 900 },
+      { width: 1280, height: 720 }
+    ];
+    const randomViewport = viewports[Math.floor(Math.random() * viewports.length)];
+    await page.setViewport({
+      width: randomViewport.width + Math.floor(Math.random() * 100),
+      height: randomViewport.height + Math.floor(Math.random() * 100)
+    });
+    
+    // Add realistic request headers
+    console.log('Setting enhanced headers...');
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'max-age=0',
+      'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1'
+    });
+
+    // Navigate with enhanced stealth
+    console.log('Navigating with stealth to URL:', fullUrl);
+    await page.goto(fullUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 45000 // Longer timeout for challenging sites
+    });
+    console.log('Navigation completed');
+
+    // Enhanced human-like behavior
+    console.log('Simulating enhanced human-like behavior...');
+    
+    // Initial delay to mimic page loading perception
+    const initialDelay = Math.floor(Math.random() * 1500) + 1000;
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
+    
+    // Realistic mouse movements and scrolling
+    for (let i = 0; i < 3; i++) {
+      await page.mouse.move(
+        Math.floor(Math.random() * 800) + 100, 
+        Math.floor(Math.random() * 600) + 100
+      );
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 500 + 200));
+    }
+    
+    // Natural scrolling pattern
+    await page.evaluate(() => {
+      const scrollAmount = Math.floor(Math.random() * 300) + 100;
+      window.scrollTo({
+        top: scrollAmount,
+        behavior: 'smooth'
+      });
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Small scroll back up (human-like behavior)
+    await page.evaluate(() => {
+      window.scrollTo({
+        top: Math.floor(Math.random() * 50),
+        behavior: 'smooth'
+      });
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if we hit a security checkpoint
+    let pageContent = await page.content();
+    if (pageContent.includes('Security Checkpoint') || pageContent.includes('verify your browser') || pageContent.includes('Checking your browser')) {
+      console.log('Detected security checkpoint, trying enhanced bypass...');
+      
+      // Enhanced human-like interactions for stealth
+      await page.mouse.move(200, 300);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Try more natural scrolling
+      await page.evaluate(() => {
+        window.scrollTo({
+          top: 400,
+          behavior: 'smooth'
+        });
+      });
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      await page.evaluate(() => {
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      });
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Try clicking somewhere safe
+      try {
+        await page.mouse.click(400, 400);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (e) {
+        console.log('Click failed, continuing...');
+      }
+      
+      // Wait longer for potential bypass
+      await new Promise(resolve => setTimeout(resolve, 8000));
+      
+      // Check if content changed
+      pageContent = await page.content();
+      if (pageContent.includes('Security Checkpoint')) {
+        console.log('Still on security checkpoint after enhanced attempts...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+
+    // Get the page content
+    console.log('Getting page content...');
+    const html = await page.content();
+    console.log('Page content length:', html.length);
+    
+    await browser.close();
+    console.log('Browser closed, returning HTML');
+    return html;
+    
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    throw error;
+  }
+}
+
+// Original Puppeteer fallback for heavily protected sites
 async function scrapeWithPuppeteer(fullUrl: string) {
   console.log('Starting Puppeteer with URL:', fullUrl);
   let browser;
@@ -390,28 +660,34 @@ export async function POST(request: NextRequest) {
           html = await scrapeWithPlaywright(fullUrl);
           console.log('Playwright fallback succeeded');
         } catch (playwrightError) {
-          console.log('Playwright failed, trying Puppeteer fallback...');
+          console.log('Playwright failed, trying Stealth Puppeteer fallback...');
           try {
-            html = await scrapeWithPuppeteer(fullUrl);
-            console.log('Puppeteer fallback succeeded');
-          } catch (puppeteerError) {
-            console.error('All scraping methods failed');
-            
-            let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
-            
-            if (response.status === 403) {
-              errorMessage = 'Access denied - this website has strong bot protection.';
-            } else if (response.status === 429) {
-              errorMessage = 'Rate limited - this website is protecting against automated requests.';
-            } else if (response.status === 503) {
-              errorMessage = 'Service unavailable - this website may be using advanced protection.';
+            html = await scrapeWithPuppeteerStealth(fullUrl);
+            console.log('Stealth Puppeteer succeeded');
+          } catch (stealthError) {
+            console.log('Stealth Puppeteer failed, trying original Puppeteer...');
+            try {
+              html = await scrapeWithPuppeteer(fullUrl);
+              console.log('Original Puppeteer fallback succeeded');
+            } catch (puppeteerError) {
+              console.error('All scraping methods failed');
+              
+              let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
+              
+              if (response.status === 403) {
+                errorMessage = 'Access denied - this website has strong bot protection.';
+              } else if (response.status === 429) {
+                errorMessage = 'Rate limited - this website is protecting against automated requests.';
+              } else if (response.status === 503) {
+                errorMessage = 'Service unavailable - this website may be using advanced protection.';
+              }
+              
+              return NextResponse.json({ 
+                error: errorMessage,
+                suggestion: 'Try accessing the website directly in your browser first, then try again later.',
+                type: 'SCRAPING_BLOCKED'
+              }, { status: 400 });
             }
-            
-            return NextResponse.json({ 
-              error: errorMessage,
-              suggestion: 'Try accessing the website directly in your browser first, then try again later.',
-              type: 'SCRAPING_BLOCKED'
-            }, { status: 400 });
           }
         }
       } else {

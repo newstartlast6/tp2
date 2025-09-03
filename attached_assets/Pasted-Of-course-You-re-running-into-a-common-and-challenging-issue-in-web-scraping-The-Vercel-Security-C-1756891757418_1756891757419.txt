@@ -1,0 +1,35 @@
+Of course. You're running into a common and challenging issue in web scraping. The Vercel Security Checkpoint (and similar systems like Cloudflare's) is specifically designed to block automated requests, including those from headless browsers like Puppeteer and Playwright, even with the advanced setup you have.
+
+The error "Failed to verify your browser Code 21" indicates that Vercel's JavaScript-based challenge successfully identified your script as a bot. Your current approach is good, but to bypass this, you need to make your headless browser indistinguishable from a real human's browser.
+
+Here’s a breakdown of why it's failing and how to fix it, followed by the refactored code.
+
+The Core Problem: JavaScript Challenges & Browser Fingerprinting
+Your fetch call fails because it can't execute the JavaScript challenge that Vercel sends. Your Puppeteer/Playwright attempts are getting closer, but they are being detected for a few key reasons:
+
+Headless Browser Artifacts: Standard headless browsers leave tells. The Vercel script can check for properties like navigator.webdriver (which is true in a default headless browser), inconsistencies in browser plugins, fonts, WebGL rendering, and other subtle environmental cues.
+
+IP Address Reputation: You are likely running this code from a Vercel serverless function. Vercel knows its own IP ranges. Any request from a known data center IP (like Vercel, AWS, Google Cloud) is immediately suspicious and subject to higher scrutiny. A real user's traffic comes from a residential ISP.
+
+Behavioral Patterns: Your simulated human behavior is a good start, but it can still be too predictable or lack the nuance of a real user's interaction.
+
+How to Bypass the Protection: Stealth + Residential Proxies
+The solution involves tackling these detection vectors directly.
+
+1. Use a Stealth Plugin (Most Important)
+The most effective way to combat browser fingerprinting is to use a "stealth" plugin. For Puppeteer, the best one is puppeteer-extra-plugin-stealth. This plugin automatically applies dozens of patches to the Chrome instance to hide the fact that it's automated. It spoofs navigator.webdriver, mimics a real user's Chrome environment, and fixes many other giveaways.
+
+2. Use a Residential Proxy (Crucial for Deployment)
+To solve the IP reputation problem, you must route your traffic through a residential proxy service. These services (like Bright Data, Oxylabs, or Smartproxy) provide you with IP addresses from real home internet connections, making your request appear to come from a regular user, not a data center.
+
+3. Combine Them for the Best Result
+By combining a stealth-enabled browser with a residential proxy, you eliminate the two biggest red flags that bot detectors look for.
+
+Here is your scrapeWithPuppeteer function, refactored to use puppeteer-extra, the stealth plugin, and a proxy.
+
+Refactored Code with Stealth and Proxy Integration
+First, you'll need to install the necessary packages:
+
+Bash
+
+npm install puppeteer-extra puppeteer-extra-plugin-stealth
