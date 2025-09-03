@@ -75,39 +75,45 @@ async function scrapeWithPuppeteer(fullUrl: string) {
       
       // Check for available browsers in Replit environment
       const fs = await import('fs');
-      const possiblePaths = [
-        '/nix/store/*/bin/chromium',  // Nix store path
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome'
-      ];
+      const { execSync } = await import('child_process');
       
       let foundPath = null;
-      for (const path of possiblePaths) {
-        try {
-          if (path.includes('*')) {
-            // Handle Nix store path with wildcard
-            const { execSync } = await import('child_process');
-            const result = execSync('find /nix/store -name chromium -type f 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
-            if (result && fs.existsSync(result)) {
-              foundPath = result;
-              break;
-            }
-          } else if (fs.existsSync(path)) {
+      
+      try {
+        // First try to find Chromium in Nix store
+        console.log('Searching for Chromium in Nix store...');
+        const result = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
+        if (result && fs.existsSync(result)) {
+          foundPath = result;
+          console.log('Found Chromium in Nix store:', foundPath);
+        }
+      } catch (e) {
+        console.log('Error searching Nix store:', e.message);
+      }
+      
+      // If not found in Nix, try standard paths
+      if (!foundPath) {
+        const standardPaths = [
+          '/usr/bin/chromium',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/google-chrome'
+        ];
+        
+        for (const path of standardPaths) {
+          if (fs.existsSync(path)) {
             foundPath = path;
+            console.log('Found browser at standard path:', foundPath);
             break;
           }
-        } catch (e) {
-          // Continue searching
         }
       }
       
       if (foundPath) {
         launchOptions.executablePath = foundPath;
-        console.log('Found browser at:', foundPath);
+        console.log('Will use browser at:', foundPath);
       } else {
-        console.log('No browser found, will try system default');
+        console.log('No browser found, puppeteer will try to find one automatically');
         // Remove executablePath to let puppeteer find it
         delete launchOptions.executablePath;
       }
