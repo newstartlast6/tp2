@@ -653,19 +653,19 @@ export async function POST(request: NextRequest) {
     let html;
     
     if (!response.ok) {
-      // If we got blocked, try advanced scraping methods
+      // If we got blocked, try stealth method first
       if ([403, 429, 503].includes(response.status)) {
         try {
-          console.log('Fetch blocked, trying Playwright fallback...');
-          html = await scrapeWithPlaywright(fullUrl);
-          console.log('Playwright fallback succeeded');
-        } catch (playwrightError) {
-          console.log('Playwright failed, trying Stealth Puppeteer fallback...');
+          console.log('Fetch blocked, trying Stealth Puppeteer fallback...');
+          html = await scrapeWithPuppeteerStealth(fullUrl);
+          console.log('Stealth Puppeteer succeeded');
+        } catch (stealthError) {
+          console.log('Stealth Puppeteer failed, trying Playwright fallback...');
           try {
-            html = await scrapeWithPuppeteerStealth(fullUrl);
-            console.log('Stealth Puppeteer succeeded');
-          } catch (stealthError) {
-            console.log('Stealth Puppeteer failed, trying original Puppeteer...');
+            html = await scrapeWithPlaywright(fullUrl);
+            console.log('Playwright fallback succeeded');
+          } catch (playwrightError) {
+            console.log('Playwright failed, trying original Puppeteer...');
             try {
               html = await scrapeWithPuppeteer(fullUrl);
               console.log('Original Puppeteer fallback succeeded');
