@@ -40,9 +40,9 @@ async function scrapeWithPuppeteer(fullUrl: string) {
   console.log('Starting Puppeteer with URL:', fullUrl);
   let browser;
   try {
-    // Dynamic import based on environment (Replit vs production)
-    const isProduction = process.env.NODE_ENV === 'production';
-    console.log('Environment - isProduction:', isProduction);
+    // Use environment detection like in the Vercel guide
+    const isVercel = !!process.env.VERCEL_ENV;
+    console.log('Environment - isVercel:', isVercel);
     let puppeteer: any;
     let launchOptions: any = {
       headless: true,
@@ -57,9 +57,9 @@ async function scrapeWithPuppeteer(fullUrl: string) {
       ]
     };
 
-    if (isProduction) {
+    if (isVercel) {
       // Use Sparticuz Chromium for production/Vercel
-      console.log('Loading Sparticuz Chromium for production...');
+      console.log('Loading Sparticuz Chromium for Vercel...');
       const chromium = (await import('@sparticuz/chromium')).default;
       puppeteer = await import('puppeteer-core');
       launchOptions = {
@@ -67,56 +67,11 @@ async function scrapeWithPuppeteer(fullUrl: string) {
         args: [...launchOptions.args, ...chromium.args],
         executablePath: await chromium.executablePath(),
       };
-      console.log('Production launch options:', launchOptions);
+      console.log('Vercel launch options:', launchOptions);
     } else {
-      // Use puppeteer-core for development
-      console.log('Setting up puppeteer-core for development...');
-      puppeteer = await import('puppeteer-core');
-      
-      // Check for available browsers in Replit environment
-      const fs = await import('fs');
-      const { execSync } = await import('child_process');
-      
-      let foundPath = null;
-      
-      try {
-        // First try to find Chromium in Nix store
-        console.log('Searching for Chromium in Nix store...');
-        const result = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
-        if (result && fs.existsSync(result)) {
-          foundPath = result;
-          console.log('Found Chromium in Nix store:', foundPath);
-        }
-      } catch (e) {
-        console.log('Error searching Nix store:', e.message);
-      }
-      
-      // If not found in Nix, try standard paths
-      if (!foundPath) {
-        const standardPaths = [
-          '/usr/bin/chromium',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/google-chrome-stable',
-          '/usr/bin/google-chrome'
-        ];
-        
-        for (const path of standardPaths) {
-          if (fs.existsSync(path)) {
-            foundPath = path;
-            console.log('Found browser at standard path:', foundPath);
-            break;
-          }
-        }
-      }
-      
-      if (foundPath) {
-        launchOptions.executablePath = foundPath;
-        console.log('Will use browser at:', foundPath);
-      } else {
-        console.log('No browser found, puppeteer will try to find one automatically');
-        // Remove executablePath to let puppeteer find it
-        delete launchOptions.executablePath;
-      }
+      // Use regular puppeteer for development (it includes its own browser)
+      console.log('Using regular puppeteer for development...');
+      puppeteer = await import('puppeteer');
       console.log('Development launch options:', launchOptions);
     }
 
