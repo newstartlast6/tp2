@@ -155,9 +155,12 @@ async function scrapeWithPuppeteer(fullUrl: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('API called');
     const { url } = await request.json();
+    console.log('Received URL:', url);
     
     if (!url) {
+      console.log('No URL provided');
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
@@ -166,12 +169,16 @@ export async function POST(request: NextRequest) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       fullUrl = `https://${url}`;
     }
+    console.log('Full URL:', fullUrl);
 
     // Try to fetch with proper headers
+    console.log('Attempting to fetch URL...');
     let response;
     try {
       response = await fetchWithHeaders(fullUrl);
+      console.log('Fetch response status:', response.status);
     } catch (error) {
+      console.log('Fetch failed with error:', error instanceof Error ? error.message : 'Unknown error');
       return NextResponse.json({ 
         error: 'Unable to access this website. It may be unreachable or have connection issues. Please check the URL and try again.',
         details: error instanceof Error ? error.message : 'Network error'
