@@ -14,6 +14,9 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
   const [thinkingStep, setThinkingStep] = useState(0);
   const [thinkingText, setThinkingText] = useState("");
   const [displayText, setDisplayText] = useState("");
@@ -96,6 +99,7 @@ export default function Onboarding() {
     setLoading(true);
     setError("");
     setScrapedData(null);
+    setShowManualForm(false);
 
     try {
       const response = await fetch('/api/scrape', {
@@ -112,9 +116,11 @@ export default function Onboarding() {
         setScrapedData(result.data);
       } else {
         setError(result.error || 'Failed to scrape the website');
+        setShowManualForm(true);
       }
     } catch (err) {
       setError('Network error. Please try again.');
+      setShowManualForm(true);
     } finally {
       setLoading(false);
     }
@@ -403,14 +409,88 @@ export default function Onboarding() {
           </button>
         </form>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 rounded-lg border border-red-500/30"
+        {/* Manual Form when scraping fails */}
+        {showManualForm && (
+          <div className="w-full max-w-[600px] mx-auto p-6 rounded-xl border border-white/20 mb-8"
                style={{
-                 background: "rgba(239, 68, 68, 0.1)",
+                 background: "rgba(255, 255, 255, 0.05)",
                  backdropFilter: "blur(10px)"
                }}>
-            <p className="text-red-300">{error}</p>
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-semibold mb-2 text-white">Let's get you set up</h2>
+              <p className="text-white/70 mb-4">Failed to get the page. Please enter details manually.</p>
+              
+              <div className="flex items-center justify-center gap-2 text-orange-200">
+                <span>✨ Auto-filled from your website</span>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (productName.trim() && productDescription.trim()) {
+                setScrapedData({
+                  url: url,
+                  title: productName,
+                  description: productDescription,
+                  content: productDescription
+                });
+                setShowManualForm(false);
+                setError("");
+              }
+            }} className="space-y-4">
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-2">Product Name</label>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="Enter your product name"
+                  className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/10 text-white placeholder:text-white/50 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition-colors"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-white/80 text-sm font-medium mb-2">Product Description</label>
+                <textarea
+                  value={productDescription}
+                  onChange={(e) => setProductDescription(e.target.value)}
+                  placeholder="Describe what your product does and its key features..."
+                  rows={6}
+                  className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/10 text-white placeholder:text-white/50 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition-colors resize-none"
+                  required
+                />
+                <p className="text-xs text-white/50 mt-1">{productDescription.length} / 5000 characters</p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!productName.trim() || !productDescription.trim()}
+                className="w-full py-3 px-6 rounded-lg text-white font-medium transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_8px_25px_rgba(255,107,53,0.3)] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                style={{
+                  background: "linear-gradient(45deg, #ff6b35, #f7931e)"
+                }}
+              >
+                Continue with Manual Entry →
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManualForm(false);
+                  setError("");
+                  setUrl("");
+                  setProductName("");
+                  setProductDescription("");
+                }}
+                className="w-full py-2 px-4 rounded-lg border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
+                style={{
+                  background: "rgba(255, 255, 255, 0.1)"
+                }}
+              >
+                Try Another URL
+              </button>
+            </form>
           </div>
         )}
 
@@ -449,6 +529,9 @@ export default function Onboarding() {
               onClick={() => {
                 setScrapedData(null);
                 setUrl("");
+                setProductName("");
+                setProductDescription("");
+                setShowManualForm(false);
               }}
               className="mt-4 px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
               style={{
