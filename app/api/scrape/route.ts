@@ -124,17 +124,24 @@ async function scrapeWithPuppeteer(fullUrl: string) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
     });
 
-    // Navigate with timeout
+    // Navigate with timeout and better wait conditions
     console.log('Navigating to URL:', fullUrl);
     await page.goto(fullUrl, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 20000 
+      waitUntil: 'networkidle0', // Wait for network to be idle
+      timeout: 30000 
     });
     console.log('Navigation completed');
 
-    // Wait a bit for any dynamic content
-    console.log('Waiting for dynamic content...');
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Wait for any security challenges to resolve
+    console.log('Waiting for security challenges and dynamic content...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Check if we hit a security checkpoint and wait longer if needed
+    const pageContent = await page.content();
+    if (pageContent.includes('Security Checkpoint') || pageContent.includes('verify your browser') || pageContent.includes('Checking your browser')) {
+      console.log('Detected security checkpoint, waiting longer...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
 
     // Get the page content
     console.log('Getting page content...');
