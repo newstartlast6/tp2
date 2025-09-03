@@ -37,10 +37,12 @@ async function fetchWithHeaders(fullUrl: string) {
 
 // Puppeteer fallback for heavily protected sites
 async function scrapeWithPuppeteer(fullUrl: string) {
+  console.log('Starting Puppeteer with URL:', fullUrl);
   let browser;
   try {
     // Dynamic import based on environment (Replit vs production)
     const isProduction = process.env.NODE_ENV === 'production';
+    console.log('Environment - isProduction:', isProduction);
     let puppeteer: any;
     let launchOptions: any = {
       headless: true,
@@ -57,6 +59,7 @@ async function scrapeWithPuppeteer(fullUrl: string) {
 
     if (isProduction) {
       // Use Sparticuz Chromium for production/Vercel
+      console.log('Loading Sparticuz Chromium for production...');
       const chromium = (await import('@sparticuz/chromium')).default;
       puppeteer = await import('puppeteer-core');
       launchOptions = {
@@ -64,30 +67,41 @@ async function scrapeWithPuppeteer(fullUrl: string) {
         args: [...launchOptions.args, ...chromium.args],
         executablePath: await chromium.executablePath(),
       };
+      console.log('Production launch options:', launchOptions);
     } else {
       // Use puppeteer-core for development
+      console.log('Setting up puppeteer-core for development...');
       puppeteer = await import('puppeteer-core');
       // Try to find Chrome/Chromium executable
       try {
         launchOptions.executablePath = '/usr/bin/google-chrome-stable';
+        console.log('Using google-chrome-stable');
       } catch {
         try {
           launchOptions.executablePath = '/usr/bin/chromium-browser';
+          console.log('Using chromium-browser');
         } catch {
           // Fallback to system default
+          console.log('Using system default browser');
           delete launchOptions.executablePath;
         }
       }
+      console.log('Development launch options:', launchOptions);
     }
 
+    console.log('Launching browser...');
     browser = await puppeteer.launch(launchOptions);
+    console.log('Browser launched successfully');
+    console.log('Creating new page...');
     const page = await browser.newPage();
     
     // Set user agent and viewport
+    console.log('Setting user agent and viewport...');
     await page.setUserAgent(USER_AGENT);
     await page.setViewport({ width: 1920, height: 1080 });
     
     // Set additional headers
+    console.log('Setting extra headers...');
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
@@ -95,18 +109,24 @@ async function scrapeWithPuppeteer(fullUrl: string) {
     });
 
     // Navigate with timeout
+    console.log('Navigating to URL:', fullUrl);
     await page.goto(fullUrl, { 
       waitUntil: 'domcontentloaded',
       timeout: 20000 
     });
+    console.log('Navigation completed');
 
     // Wait a bit for any dynamic content
+    console.log('Waiting for dynamic content...');
     await page.waitForTimeout(1500);
 
     // Get the page content
+    console.log('Getting page content...');
     const html = await page.content();
+    console.log('Page content length:', html.length);
     
     await browser.close();
+    console.log('Browser closed, returning HTML');
     return html;
     
   } catch (error) {
@@ -150,7 +170,14 @@ export async function POST(request: NextRequest) {
         try {
           console.log('Fetch blocked, trying Puppeteer fallback...');
           html = await scrapeWithPuppeteer(fullUrl);
+          console.log('Puppeteer fallback succeeded');
         } catch (puppeteerError) {
+          console.error('Puppeteer fallback failed:', puppeteerError);
+          console.error('Puppeteer error details:', {
+            message: puppeteerError instanceof Error ? puppeteerError.message : 'Unknown error',
+            stack: puppeteerError instanceof Error ? puppeteerError.stack : null
+          });
+          
           let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
           
           if (response.status === 403) {
@@ -163,7 +190,8 @@ export async function POST(request: NextRequest) {
           
           return NextResponse.json({ 
             error: errorMessage,
-            suggestion: 'Try accessing the website directly first, or try again later.'
+            suggestion: 'Try accessing the website directly first, or try again later.',
+            debug: puppeteerError instanceof Error ? puppeteerError.message : 'Unknown puppeteer error'
           }, { status: 400 });
         }
       } else {
