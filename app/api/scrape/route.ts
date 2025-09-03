@@ -115,56 +115,68 @@ function extractWithReadability(html: string, url: string) {
   return null;
 }
 
-// Playwright fallback with better stealth capabilities
-async function scrapeWithPlaywright(fullUrl: string) {
-  console.log('Starting Playwright with URL:', fullUrl);
-  let browser;
-  try {
-    const { chromium } = await import('playwright');
-    
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=VizDisplayCompositor'
-      ]
-    });
-    
-    const context = await browser.newContext({
-      userAgent: getRandomUserAgent(),
-      viewport: { width: 1366, height: 768 },
-      extraHTTPHeaders: {
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br'
-      }
-    });
-    
-    const page = await context.newPage();
-    
-    // Navigate with longer timeout
-    await page.goto(fullUrl, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 30000 
-    });
-    
-    // Wait and simulate human behavior
-    await page.waitForTimeout(2000);
-    await page.mouse.move(100, 100);
-    await page.waitForTimeout(1000);
-    
-    const html = await page.content();
-    await browser.close();
-    
-    return html;
-  } catch (error) {
-    if (browser) {
-      await browser.close();
+// A function to wait until the security checkpoint message is gone from the page
+async function activelyWaitForContent(page: any, timeout = 25000) {
+  console.log('[activeWait] Starting active wait for content...');
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    const content = await page.content();
+    const title = await page.title();
+    const { isCheckpoint, type } = isSecurityCheckpoint(content, title);
+    const textContentLength = await page.evaluate(() => document.body.innerText.length);
+
+    // Standard success case: no checkpoint and some content
+    if (!isCheckpoint && textContentLength > 200) {
+      console.log(`[activeWait] SUCCESS: Security check clear and content length is valid (${textContentLength}).`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return true;
     }
-    throw error;
+
+    // Override success case: A checkpoint is visible, but the page also has a lot of content,
+    // meaning the checkpoint is likely an overlay on top of the real content.
+    if (isCheckpoint && textContentLength > 1500) {
+      console.log(`[activeWait] OVERRIDE: Checkpoint '${type}' detected, BUT substantial content (length: ${textContentLength}) also found. Proceeding.`);
+      return true;
+    }
+
+    // Log the current state if we are continuing the loop
+    if (isCheckpoint) {
+      console.log(`[activeWait] Checkpoint detected: ${type}. Content length (${textContentLength}) is low. Simulating interaction...`);
+    } else {
+      console.log(`[activeWait] Security check clear, but content short (${textContentLength}). Simulating interaction...`);
+    }
+
+
+    // --- Active Interaction ---
+    try {
+      // More human-like scrolling
+      await page.evaluate(() => {
+        window.scrollBy(0, Math.floor(Math.random() * 100) + 50);
+      });
+      
+      const viewport = page.viewport();
+      if (viewport) {
+        const randomX = Math.floor(Math.random() * viewport.width * 0.8) + 20;
+        const randomY = Math.floor(Math.random() * viewport.height * 0.8) + 20;
+        
+        console.log(`[activeWait] Moving mouse to ${randomX}, ${randomY} and attempting realistic click.`);
+        await page.mouse.move(randomX, randomY, { steps: 5 });
+        await page.mouse.down();
+        await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
+        await page.mouse.up();
+      }
+    } catch (e) {
+      console.log('[activeWait] Could not simulate interaction, page might be loading or an overlay is blocking clicks.');
+    }
+    
+    // Use randomized delay
+    const randomDelay = 1500 + Math.random() * 1000;
+    await new Promise(resolve => setTimeout(resolve, randomDelay)); 
   }
+  
+  console.log('[activeWait] FAILURE: Timed out waiting for content to settle.');
+  return false;
 }
 
 // Enhanced Puppeteer with stealth plugin for bypassing protection
@@ -172,261 +184,58 @@ async function scrapeWithPuppeteerStealth(fullUrl: string) {
   console.log('Starting Puppeteer Stealth with URL:', fullUrl);
   let browser;
   try {
-    // Use environment detection like in the Vercel guide
     const isVercel = !!process.env.VERCEL_ENV;
     console.log('Environment - isVercel:', isVercel);
     
-    // Use puppeteer-extra with stealth plugin
     const puppeteerExtra = await import('puppeteer-extra');
     const StealthPlugin = (await import('puppeteer-extra-plugin-stealth')).default;
-    
-    // Add stealth plugin to hide automation
     puppeteerExtra.default.use(StealthPlugin());
     
     let puppeteer: any = puppeteerExtra.default;
-    let launchOptions: any = {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-field-trial-config',
-        '--disable-background-networking',
-        '--disable-client-side-phishing-detection',
-        '--disable-sync',
-        '--disable-translate',
-        '--disable-ipc-flooding-protection',
-        // Additional stealth arguments
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-extensions-except',
-        '--disable-extensions',
-        '--no-default-browser-check',
-        '--disable-default-apps',
-        '--disable-background-networking'
-      ]
-    };
+    let launchOptions: any;
 
     if (isVercel) {
-      // Use Sparticuz Chromium for production/Vercel with stealth
       console.log('Loading Sparticuz Chromium for Vercel with stealth...');
       const chromium = (await import('@sparticuz/chromium')).default;
       launchOptions = {
-        ...launchOptions,
-        args: [...launchOptions.args, ...chromium.args],
+        headless: true,
+        args: chromium.args,
         executablePath: await chromium.executablePath(),
       };
-      console.log('Vercel stealth launch options:', launchOptions);
     } else {
-      // Use system Chromium for development with stealth
-      console.log('Using system Chromium for development with stealth...');
-      
-      // Use the system Chromium we installed via Nix
-      const { execSync } = await import('child_process');
-      try {
-        const chromiumPath = execSync('which chromium', { encoding: 'utf-8' }).trim();
-        launchOptions.executablePath = chromiumPath;
-        console.log('Found system Chromium at:', chromiumPath);
-      } catch (e) {
-        console.log('System Chromium not found, will try to find manually');
-        // Fallback to manual search
-        try {
-          const nixChromium = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
-          if (nixChromium) {
-            launchOptions.executablePath = nixChromium;
-            console.log('Found Nix Chromium at:', nixChromium);
-          }
-        } catch (e2) {
-          console.log('Could not find any Chromium installation');
-        }
-      }
-      console.log('Development stealth launch options:', launchOptions);
+      console.log('Using puppeteer-extra with bundled Chromium for development...');
+      launchOptions = {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      };
     }
 
     console.log('Launching stealth browser...');
     browser = await puppeteer.launch(launchOptions);
     console.log('Stealth browser launched successfully');
-    console.log('Creating new page with enhanced stealth...');
     const page = await browser.newPage();
     
-    // Enhanced stealth measures
     await page.evaluateOnNewDocument(() => {
-      // Remove webdriver property
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-      
-      // Mock chrome runtime
-      (window as any).chrome = {
-        runtime: {}
-      };
-      
-      // Mock permissions
-      Object.defineProperty(navigator, 'permissions', {
-        get: () => ({
-          query: () => Promise.resolve({ state: 'granted' })
-        })
-      });
-      
-      // Mock plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [
-          {
-            0: {
-              type: "application/x-google-chrome-pdf",
-              suffixes: "pdf",
-              description: "Portable Document Format"
-            },
-            description: "Portable Document Format",
-            filename: "internal-pdf-viewer",
-            length: 1,
-            name: "Chrome PDF Plugin"
-          }
-        ]
-      });
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
     
-    // Set random user agent and realistic viewport
-    const randomUserAgent = getRandomUserAgent();
-    console.log('Setting enhanced user agent and viewport...');
-    await page.setUserAgent(randomUserAgent);
+    await page.setUserAgent(getRandomUserAgent());
+    await page.setViewport({ width: 1920, height: 1080 });
     
-    // More realistic viewport variations
-    const viewports = [
-      { width: 1920, height: 1080 },
-      { width: 1366, height: 768 },
-      { width: 1536, height: 864 },
-      { width: 1440, height: 900 },
-      { width: 1280, height: 720 }
-    ];
-    const randomViewport = viewports[Math.floor(Math.random() * viewports.length)];
-    await page.setViewport({
-      width: randomViewport.width + Math.floor(Math.random() * 100),
-      height: randomViewport.height + Math.floor(Math.random() * 100)
-    });
-    
-    // Add realistic request headers
-    console.log('Setting enhanced headers...');
-    await page.setExtraHTTPHeaders({
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Cache-Control': 'max-age=0',
-      'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1'
-    });
-
-    // Navigate with enhanced stealth
     console.log('Navigating with stealth to URL:', fullUrl);
     await page.goto(fullUrl, { 
       waitUntil: 'domcontentloaded',
-      timeout: 45000 // Longer timeout for challenging sites
+      timeout: 60000 
     });
-    console.log('Navigation completed');
+    console.log('[PuppeteerStealth] Navigation completed');
 
-    // Enhanced human-like behavior
-    console.log('Simulating enhanced human-like behavior...');
-    
-    // Initial delay to mimic page loading perception
-    const initialDelay = Math.floor(Math.random() * 1500) + 1000;
-    await new Promise(resolve => setTimeout(resolve, initialDelay));
-    
-    // Realistic mouse movements and scrolling
-    for (let i = 0; i < 3; i++) {
-      await page.mouse.move(
-        Math.floor(Math.random() * 800) + 100, 
-        Math.floor(Math.random() * 600) + 100
-      );
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 500 + 200));
-    }
-    
-    // Natural scrolling pattern
-    await page.evaluate(() => {
-      const scrollAmount = Math.floor(Math.random() * 300) + 100;
-      window.scrollTo({
-        top: scrollAmount,
-        behavior: 'smooth'
-      });
-    });
-    
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Small scroll back up (human-like behavior)
-    await page.evaluate(() => {
-      window.scrollTo({
-        top: Math.floor(Math.random() * 50),
-        behavior: 'smooth'
-      });
-    });
-    
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check if we hit a security checkpoint
-    let pageContent = await page.content();
-    if (pageContent.includes('Security Checkpoint') || pageContent.includes('verify your browser') || pageContent.includes('Checking your browser')) {
-      console.log('Detected security checkpoint, trying enhanced bypass...');
-      
-      // Enhanced human-like interactions for stealth
-      await page.mouse.move(200, 300);
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Try more natural scrolling
-      await page.evaluate(() => {
-        window.scrollTo({
-          top: 400,
-          behavior: 'smooth'
-        });
-      });
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      await page.evaluate(() => {
-        window.scrollTo({
-          top: 0,
-          behavior: 'smooth'
-        });
-      });
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Try clicking somewhere safe
-      try {
-        await page.mouse.click(400, 400);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (e) {
-        console.log('Click failed, continuing...');
-      }
-      
-      // Wait longer for potential bypass
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      
-      // Check if content changed
-      pageContent = await page.content();
-      if (pageContent.includes('Security Checkpoint')) {
-        console.log('Still on security checkpoint after enhanced attempts...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
+    await activelyWaitForContent(page);
 
-    // Get the page content
-    console.log('Getting page content...');
+    console.log('[PuppeteerStealth] Getting final page content...');
     const html = await page.content();
-    console.log('Page content length:', html.length);
     
+    console.log('[PuppeteerStealth] Closing browser.');
     await browser.close();
-    console.log('Browser closed, returning HTML');
     return html;
     
   } catch (error) {
@@ -442,172 +251,51 @@ async function scrapeWithPuppeteer(fullUrl: string) {
   console.log('Starting Puppeteer with URL:', fullUrl);
   let browser;
   try {
-    // Use environment detection like in the Vercel guide
     const isVercel = !!process.env.VERCEL_ENV;
     console.log('Environment - isVercel:', isVercel);
     let puppeteer: any;
-    let launchOptions: any = {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-field-trial-config',
-        '--disable-background-networking',
-        '--disable-client-side-phishing-detection',
-        '--disable-sync',
-        '--disable-translate',
-        '--disable-ipc-flooding-protection'
-      ]
-    };
+    let launchOptions: any;
 
     if (isVercel) {
-      // Use Sparticuz Chromium for production/Vercel
       console.log('Loading Sparticuz Chromium for Vercel...');
       const chromium = (await import('@sparticuz/chromium')).default;
       puppeteer = await import('puppeteer-core');
       launchOptions = {
-        ...launchOptions,
-        args: [...launchOptions.args, ...chromium.args],
+        headless: true,
+        args: chromium.args,
         executablePath: await chromium.executablePath(),
       };
-      console.log('Vercel launch options:', launchOptions);
     } else {
-      // Use puppeteer-core with system Chromium for development
-      console.log('Using puppeteer-core with system Chromium for development...');
-      puppeteer = await import('puppeteer-core');
-      
-      // Use the system Chromium we installed via Nix
-      const { execSync } = await import('child_process');
-      try {
-        const chromiumPath = execSync('which chromium', { encoding: 'utf-8' }).trim();
-        launchOptions.executablePath = chromiumPath;
-        console.log('Found system Chromium at:', chromiumPath);
-      } catch (e) {
-        console.log('System Chromium not found, will try to find manually');
-        // Fallback to manual search
-        try {
-          const nixChromium = execSync('find /nix/store -name chromium -type f -executable 2>/dev/null | head -1', { encoding: 'utf-8' }).trim();
-          if (nixChromium) {
-            launchOptions.executablePath = nixChromium;
-            console.log('Found Nix Chromium at:', nixChromium);
-          }
-        } catch (e2) {
-          console.log('Could not find any Chromium installation');
-        }
-      }
-      console.log('Development launch options:', launchOptions);
+      console.log('Using puppeteer with bundled Chromium for development...');
+      puppeteer = await import('puppeteer');
+      launchOptions = {
+        headless: false,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      };
     }
 
     console.log('Launching browser...');
     browser = await puppeteer.launch(launchOptions);
     console.log('Browser launched successfully');
-    console.log('Creating new page...');
     const page = await browser.newPage();
     
-    // Set random user agent and realistic viewport
-    const randomUserAgent = getRandomUserAgent();
-    console.log('Setting user agent and viewport...');
-    await page.setUserAgent(randomUserAgent);
-    await page.setViewport({ 
-      width: 1366 + Math.floor(Math.random() * 200), 
-      height: 768 + Math.floor(Math.random() * 200) 
-    });
-    
-    // Set additional headers with more realistic values
-    console.log('Setting extra headers...');
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1'
-    });
+    await page.setUserAgent(getRandomUserAgent());
+    await page.setViewport({ width: 1366, height: 768 });
 
-    // Navigate with timeout and better wait conditions
     console.log('Navigating to URL:', fullUrl);
     await page.goto(fullUrl, { 
       waitUntil: 'domcontentloaded',
-      timeout: 30000 
+      timeout: 60000 
     });
-    console.log('Navigation completed');
-
-    // Human-like behavior: random delays and mouse movements
-    console.log('Simulating human-like behavior...');
-    const randomDelay = Math.floor(Math.random() * 2000) + 1000;
-    await new Promise(resolve => setTimeout(resolve, randomDelay));
+    console.log('[Puppeteer] Navigation completed');
     
-    // Random mouse movements
-    await page.mouse.move(
-      Math.floor(Math.random() * 400) + 100, 
-      Math.floor(Math.random() * 300) + 100
-    );
+    await activelyWaitForContent(page);
     
-    // Random scroll
-    await page.evaluate(() => {
-      window.scrollTo(0, Math.floor(Math.random() * 200) + 50);
-    });
-    
-    // Wait a bit more
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check if we hit a security checkpoint
-    let pageContent = await page.content();
-    if (pageContent.includes('Security Checkpoint') || pageContent.includes('verify your browser') || pageContent.includes('Checking your browser')) {
-      console.log('Detected security checkpoint, trying to bypass...');
-      
-      // More human-like interactions
-      await page.mouse.move(200, 300);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Try scrolling down and up
-      await page.evaluate(() => {
-        window.scrollTo(0, 300);
-      });
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      await page.evaluate(() => {
-        window.scrollTo(0, 0);
-      });
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Click somewhere random (but safe)
-      try {
-        await page.mouse.click(400, 400);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {
-        console.log('Click failed, continuing...');
-      }
-      
-      // Wait for potential redirect or content change
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check if content changed
-      pageContent = await page.content();
-      if (pageContent.includes('Security Checkpoint')) {
-        console.log('Still on security checkpoint, waiting longer...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
-
-    // Get the page content
-    console.log('Getting page content...');
+    console.log('[Puppeteer] Getting final page content...');
     const html = await page.content();
-    console.log('Page content length:', html.length);
     
+    console.log('[Puppeteer] Closing browser.');
     await browser.close();
-    console.log('Browser closed, returning HTML');
     return html;
     
   } catch (error) {
@@ -629,102 +317,82 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    // Add protocol if missing
     let fullUrl = url;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       fullUrl = `https://${url}`;
     }
     console.log('Full URL:', fullUrl);
 
-    // Try to fetch with proper headers
-    console.log('Attempting to fetch URL...');
-    let response;
-    try {
-      response = await fetchWithHeaders(fullUrl);
-      console.log('Fetch response status:', response.status);
-    } catch (error) {
-      console.log('Fetch failed with error:', error instanceof Error ? error.message : 'Unknown error');
-      return NextResponse.json({ 
-        error: 'Unable to access this website. It may be unreachable or have connection issues. Please check the URL and try again.',
-        details: error instanceof Error ? error.message : 'Network error'
-      }, { status: 400 });
-    }
+    let html: string | undefined;
+    let useFallback = false;
 
-    let html;
-    
-    if (!response.ok) {
-      // If we got blocked, try stealth method first
-      if ([403, 429, 503].includes(response.status)) {
-        try {
-          console.log('Fetch blocked, trying Stealth Puppeteer fallback...');
-          html = await scrapeWithPuppeteerStealth(fullUrl);
-          console.log('Stealth Puppeteer succeeded');
-        } catch (stealthError) {
-          console.log('Stealth Puppeteer failed, trying Playwright fallback...');
-          try {
-            html = await scrapeWithPlaywright(fullUrl);
-            console.log('Playwright fallback succeeded');
-          } catch (playwrightError) {
-            console.log('Playwright failed, trying original Puppeteer...');
-            try {
-              html = await scrapeWithPuppeteer(fullUrl);
-              console.log('Original Puppeteer fallback succeeded');
-            } catch (puppeteerError) {
-              console.error('All scraping methods failed');
-              
-              let errorMessage = `Failed to fetch URL: ${response.status} ${response.statusText}`;
-              
-              if (response.status === 403) {
-                errorMessage = 'Access denied - this website has strong bot protection.';
-              } else if (response.status === 429) {
-                errorMessage = 'Rate limited - this website is protecting against automated requests.';
-              } else if (response.status === 503) {
-                errorMessage = 'Service unavailable - this website may be using advanced protection.';
-              }
-              
-              return NextResponse.json({ 
-                error: errorMessage,
-                suggestion: 'Try accessing the website directly in your browser first, then try again later.',
-                type: 'SCRAPING_BLOCKED'
-              }, { status: 400 });
-            }
-          }
+    // --- STAGE 1: Initial Fetch ---
+    console.log('--- STAGE 1: Attempting direct fetch ---');
+    try {
+      const response = await fetchWithHeaders(fullUrl);
+      console.log(`[Fetch] Response status: ${response.status}`);
+
+      if (response.ok) {
+        html = await response.text();
+        const $ = cheerio.load(html);
+        const title = $('title').text().trim() || 'No title found';
+        
+        const checkpointResult = isSecurityCheckpoint(html, title);
+        if (checkpointResult.isCheckpoint) {
+          console.log(`[Fetch] Security checkpoint detected in 200 OK response: ${checkpointResult.type}`);
+          useFallback = true;
+        } else {
+          console.log('[Fetch] Success, content appears valid.');
         }
       } else {
-        return NextResponse.json({ 
-          error: `Failed to fetch URL: ${response.status} ${response.statusText}` 
-        }, { status: 400 });
+        console.log(`[Fetch] Request failed with status: ${response.status}. Initiating fallback.`);
+        useFallback = true;
       }
-    } else {
-      html = await response.text();
+    } catch (error) {
+      console.log('Initial fetch threw an error:', error instanceof Error ? error.message : 'Unknown error');
+      useFallback = true;
     }
-    const $ = cheerio.load(html);
+    
+    // --- STAGE 2: Fallback to Headless Browsers if needed ---
+    if (useFallback) {
+      console.log('\n--- STAGE 2: Initiating fallback scraping methods ---');
+      try {
+        console.log('\n[Fallback] Trying Stealth Puppeteer...');
+        html = await scrapeWithPuppeteerStealth(fullUrl);
+        console.log('[Fallback] Stealth Puppeteer succeeded.');
+      } catch (stealthError) {
+        console.error('[Fallback] Stealth Puppeteer failed:', stealthError instanceof Error ? stealthError.message : stealthError);
+        try {
+          console.log('\n[Fallback] Trying original Puppeteer...');
+          html = await scrapeWithPuppeteer(fullUrl);
+          console.log('[Fallback] Original Puppeteer succeeded.');
+        } catch (puppeteerError) {
+          console.error('[Fallback] All scraping methods failed:', puppeteerError instanceof Error ? puppeteerError.message : puppeteerError);
+          return NextResponse.json({ 
+            error: 'This website has strong protection that could not be bypassed.',
+            suggestion: 'Try accessing the website directly in your browser first, then try again later.',
+            type: 'SCRAPING_BLOCKED'
+          }, { status: 400 });
+        }
+      }
+    }
+    
+    if (!html) {
+        console.error('Failed to retrieve HTML content after all attempts.');
+        return NextResponse.json({ error: 'Failed to retrieve page content.' }, { status: 500 });
+    }
 
-    // Extract title for security checkpoint detection
+    // --- STAGE 3: Content Extraction ---
+    console.log('\n--- STAGE 3: Extracting content from final HTML ---');
+    console.log('[Extraction] HTML received from browser, proceeding directly to extraction.');
+    console.log('[Extraction] HTML Snippet (first 500 chars):', html.substring(0, 500));
+
+    const $ = cheerio.load(html);
     let title = $('title').text().trim() || 
                 $('h1').first().text().trim() || 
                 $('meta[property="og:title"]').attr('content') || 
                 'No title found';
-
-    // Check for security checkpoints
-    const checkpointResult = isSecurityCheckpoint(html, title);
     
-    if (checkpointResult.isCheckpoint) {
-      console.log('Security checkpoint detected:', checkpointResult.type);
-      return NextResponse.json({
-        error: checkpointResult.message,
-        type: 'SECURITY_CHECKPOINT',
-        checkpointType: checkpointResult.type,
-        suggestion: 'This website has protection against automated requests. You may need to visit the site directly in your browser first.',
-        alternatives: [
-          'Try visiting the website directly in your browser',
-          'Wait a few minutes and try again',
-          'Check if the website has a public API for accessing content'
-        ]
-      }, { status: 400 });
-    }
-
-    // Try Mozilla Readability first for better content extraction
     const readabilityResult = extractWithReadability(html, fullUrl);
     
     let description, content;
@@ -739,53 +407,35 @@ export async function POST(request: NextRequest) {
                    content.substring(0, 300);
     } else {
       console.log('Using fallback content extraction');
-      // Fallback to original extraction method
       description = $('meta[name="description"]').attr('content') || 
                     $('meta[property="og:description"]').attr('content') || 
                     $('meta[name="twitter:description"]').attr('content') || 
                     $('p').first().text().trim().substring(0, 300) || 
                     'No description found';
 
-      // Extract main content - look for common content containers
       const contentSelectors = [
-        'main',
-        '[role="main"]',
-        '.main-content',
-        '.content',
-        'article',
-        '.post-content',
-        '.entry-content',
-        '.page-content',
-        'section'
+        'main', '[role="main"]', '.main-content', '.content', 'article',
+        '.post-content', '.entry-content', '.page-content', 'section'
       ];
 
       content = '';
       for (const selector of contentSelectors) {
         const element = $(selector).first();
         if (element.length > 0) {
-          // Remove script and style tags
           element.find('script, style, nav, header, footer, aside').remove();
           content = element.text().trim();
-          if (content && content.length > 100) {
-            break;
-          }
+          if (content && content.length > 100) break;
         }
       }
 
-      // Fallback: get all paragraph content if no main content found
       if (!content || content.length < 100) {
         const paragraphs = $('p').map((_, el) => $(el).text().trim()).get();
         content = paragraphs.join(' ').substring(0, 1000);
       }
 
-      // Clean up content
-      content = content
-        .replace(/\s+/g, ' ')
-        .trim()
-        .substring(0, 2000) || 'No content found';
+      content = content.replace(/\s+/g, ' ').trim().substring(0, 2000) || 'No content found';
     }
 
-    // Clean up description
     description = description.substring(0, 500);
 
     return NextResponse.json({
@@ -796,7 +446,7 @@ export async function POST(request: NextRequest) {
         description,
         content
       },
-      extractionMethod: readabilityResult ? 'readability' : 'fallback'
+      extractionMethod: readabilityResult && readabilityResult.content.length > 100 ? 'readability' : 'fallback'
     });
 
   } catch (error) {
