@@ -132,435 +132,247 @@ export default function Onboarding() {
     setLoading(true);
     setError("");
     setScrapedData(null);
-    setShowManualForm(false);
+    setMarketingReport(null);
+    setProgress(0);
 
     try {
-      const response = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      // Step 1: Scrape the website
+      const scrapeResponse = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        // Check if the scraped content contains security checkpoint errors
-        const isSecurityCheckpoint = (data: ScrapedData) => {
-          const content = (data.title + ' ' + data.description + ' ' + data.content).toLowerCase();
-          return content.includes('failed to verify your browser') ||
-                 content.includes('vercel security checkpoint') ||
-                 content.includes('cloudflare') ||
-                 content.includes('checking your browser') ||
-                 content.includes('security check') ||
-                 content.includes('bot protection') ||
-                 content.includes('access denied') ||
-                 content.includes('rate limit') ||
-                 content.includes('code 11') ||
-                 content.includes('code 21');
-        };
-
-        if (isSecurityCheckpoint(result.data)) {
-          setError('This website has security protection that prevents automatic access. Please enter your project details manually.');
+      if (!scrapeResponse.ok) {
+        const errorData = await scrapeResponse.text();
+        
+        if (scrapeResponse.status === 403) {
           setShowManualForm(true);
-        } else {
-          // Generate marketing report with AI
-          try {
-            const reportResponse = await fetch('/api/marketing-report', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ data: result.data }),
-            });
-
-            const reportResult = await reportResponse.json();
-
-            if (reportResult.success) {
-              setMarketingReport(reportResult.report);
-              setScrapedData(result.data);
-            } else {
-              setError('Failed to generate marketing report. Please try again.');
-              setShowManualForm(true);
-            }
-          } catch (reportError) {
-            setError('Failed to generate marketing report. Please try again.');
-            setShowManualForm(true);
-          }
+          setError("This website requires manual information. Please fill out the form below:");
+          setLoading(false);
+          setProgress(100);
+          return;
         }
-      } else {
-        setError(result.error || 'Failed to scrape the website');
-        setShowManualForm(true);
+        
+        throw new Error(errorData || "Failed to analyze website");
       }
+
+      const scraped = await scrapeResponse.json();
+      setScrapedData(scraped);
+      setProgress(60);
+
+      // Step 2: Generate marketing report
+      const reportResponse = await fetch("/api/marketing-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scrapedData: scraped,
+          productName: scraped.title,
+          productDescription: scraped.description
+        }),
+      });
+
+      if (!reportResponse.ok) {
+        throw new Error("Failed to generate marketing report");
+      }
+
+      const report = await reportResponse.json();
+      setMarketingReport(report);
+      setProgress(100);
+
     } catch (err) {
-      setError('Network error. Please try again.');
-      setShowManualForm(true);
+      console.error("Error:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col justify-center items-center text-white font-[family-name:var(--font-geist-sans)] p-5 overflow-hidden" 
-           style={{
-             background: "radial-gradient(ellipse at center, #3a1a00 0%, #2a1500 25%, #1f0f00 50%, #150a00 75%, #0a0500 100%)"
-           }}>
-        
-        {/* Animated Background Neural Network */}
-        <div className="absolute inset-0 overflow-hidden">
-          {/* Floating AI nodes */}
-          {[...Array(30)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-full opacity-30"
-              style={{
-                background: "linear-gradient(45deg, #ff6b35, #f7931e)",
-                width: `${Math.random() * 6 + 3}px`,
-                height: `${Math.random() * 6 + 3}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animation: `aiFloat ${4 + Math.random() * 6}s ease-in-out infinite ${Math.random() * 3}s`,
-                boxShadow: "0 0 10px rgba(255, 107, 53, 0.3)"
-              }}
-            />
-          ))}
-          
-          {/* Connecting neural paths */}
-          <svg className="absolute inset-0 w-full h-full">
-            {[...Array(15)].map((_, i) => (
-              <line
-                key={i}
-                x1={`${Math.random() * 100}%`}
-                y1={`${Math.random() * 100}%`}
-                x2={`${Math.random() * 100}%`}
-                y2={`${Math.random() * 100}%`}
-                stroke="rgba(255, 107, 53, 0.1)"
-                strokeWidth="1"
-                style={{ 
-                  animation: `neuralPulse ${2 + Math.random() * 3}s ease-in-out infinite ${Math.random() * 2}s`
-                }}
-              />
-            ))}
-          </svg>
-        </div>
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!productName.trim() || !productDescription.trim()) return;
 
-        <div className="relative z-10 text-center max-w-[600px] w-full">
-          {/* Enhanced AI Logo with Holographic Effect */}
-          <div className="mb-8 flex justify-center">
-            <div className="relative">
-              {/* Main logo */}
-              <div className="w-24 h-24 rounded-3xl flex items-center justify-center text-3xl font-bold text-white relative overflow-hidden"
-                   style={{
-                     background: "linear-gradient(45deg, #ff6b35, #f7931e)",
-                     animation: "logoGlow 3s ease-in-out infinite",
-                     boxShadow: "0 0 40px rgba(255, 107, 53, 0.6)"
-                   }}>
-                G
-                {/* Scanning line effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                     style={{ animation: "scan 2s linear infinite" }}></div>
-              </div>
-              
-              {/* Multiple rotating orbital rings */}
-              <div className="absolute -inset-4 rounded-full border-2 border-orange-400/20"
-                   style={{ animation: "orbit1 4s linear infinite" }}></div>
-              <div className="absolute -inset-8 rounded-full border border-orange-300/15"
-                   style={{ animation: "orbit2 6s linear infinite reverse" }}></div>
-              <div className="absolute -inset-12 rounded-full border border-orange-200/10"
-                   style={{ animation: "orbit3 8s linear infinite" }}></div>
-            </div>
-          </div>
+    setLoading(true);
+    setError("");
+    setProgress(0);
 
-          {/* Advanced AI Brain Visualization */}
-          <div className="mb-8 flex justify-center">
-            <div className="relative w-40 h-20">
-              {/* Central processing core */}
-              <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-orange-500"
-                   style={{ animation: "corePulse 1.5s ease-in-out infinite" }}></div>
-              
-              {/* Neural network layers */}
-              {[...Array(12)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute w-3 h-3 rounded-full bg-orange-400"
-                  style={{
-                    left: `${15 + (i % 4) * 25}%`,
-                    top: `${10 + Math.floor(i / 4) * 30}%`,
-                    animation: `neuronPulse ${1.2 + Math.random() * 0.8}s ease-in-out infinite ${i * 0.1}s`,
-                    opacity: 0.7
-                  }}
-                />
-              ))}
-              
-              {/* Dynamic synaptic connections */}
-              <svg className="absolute inset-0 w-full h-full">
-                {[...Array(20)].map((_, i) => (
-                  <line
-                    key={i}
-                    x1={`${20 + (i % 4) * 25}%`}
-                    y1={`${15 + Math.floor(i / 4) * 30}%`}
-                    x2="50%"
-                    y2="50%"
-                    stroke="rgba(255, 107, 53, 0.4)"
-                    strokeWidth="1.5"
-                    style={{ 
-                      animation: `synapseFlow ${1.5 + Math.random() * 1}s ease-in-out infinite ${i * 0.05}s`
-                    }}
-                  />
-                ))}
-              </svg>
-            </div>
-          </div>
+    try {
+      // Create mock scraped data from manual input
+      const mockScrapedData = {
+        url: url,
+        title: productName,
+        description: productDescription,
+        content: `${productName}: ${productDescription}`
+      };
 
-          {/* AI Status with typing effect */}
-          <h2 className="text-4xl font-light mb-6 tracking-[-0.02em]">
-            <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-              AI Agent Analyzing
-            </span>
-          </h2>
-          
-          {/* Typing message display */}
-          <div className="mb-8 min-h-[60px] flex items-center justify-center">
-            <p className="text-xl text-white/90 mb-2 transition-all duration-300 font-mono">
-              {displayText}
-              {isTyping && <span className="animate-pulse">|</span>}
-            </p>
-          </div>
+      setScrapedData(mockScrapedData);
+      setProgress(50);
 
-          {/* Overall Progress Bar */}
-          <div className="mb-8 max-w-[400px] mx-auto">
-            <div className="flex justify-between text-sm text-white/70 mb-2">
-              <span>Analysis Progress</span>
-              <span className="text-orange-400">{Math.round(progress)}%</span>
-            </div>
-            <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500 ease-out relative overflow-hidden"
-                style={{
-                  background: "linear-gradient(90deg, #ff6b35, #f7931e, #ff6b35)",
-                  width: `${progress}%`,
-                  backgroundSize: "200% 100%",
-                  animation: "shimmer 2s ease-in-out infinite"
-                }}
-              />
-            </div>
-          </div>
+      // Generate marketing report
+      const reportResponse = await fetch("/api/marketing-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scrapedData: mockScrapedData,
+          productName,
+          productDescription
+        }),
+      });
 
-          {/* Step indicators with better animations */}
-          <div className="flex justify-center gap-3 mb-8">
-            {thinkingMessages.map((_, i) => (
-              <div
-                key={i}
-                className={`w-3 h-3 rounded-full transition-all duration-500 ${
-                  i <= thinkingStep ? 'bg-orange-400 scale-110' : 'bg-white/20 scale-100'
-                }`}
-                style={{
-                  animation: i <= thinkingStep ? 'stepPulse 2s ease-in-out infinite' : 'none',
-                  boxShadow: i <= thinkingStep ? '0 0 15px rgba(255, 107, 53, 0.6)' : 'none'
-                }}
-              />
-            ))}
-          </div>
+      if (!reportResponse.ok) {
+        throw new Error("Failed to generate marketing report");
+      }
 
-          {/* URL being analyzed with enhanced styling */}
-          <div className="mt-8 p-6 rounded-xl border border-orange-500/30 backdrop-blur-lg"
-               style={{
-                 background: "rgba(255, 107, 53, 0.1)",
-                 boxShadow: "0 8px 32px rgba(255, 107, 53, 0.2)"
-               }}>
-            <p className="text-sm text-orange-200 mb-2 font-semibold">Analyzing Website:</p>
-            <p className="text-orange-100 font-mono break-all text-lg">{url}</p>
-          </div>
-        </div>
+      const report = await reportResponse.json();
+      setMarketingReport(report);
+      setProgress(100);
+      setShowManualForm(false);
 
-        <style jsx>{`
-          @keyframes aiFloat {
-            0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); opacity: 0.3; }
-            25% { transform: translateY(-15px) translateX(10px) rotate(90deg); opacity: 0.7; }
-            50% { transform: translateY(-30px) translateX(0px) rotate(180deg); opacity: 1; }
-            75% { transform: translateY(-15px) translateX(-10px) rotate(270deg); opacity: 0.7; }
-          }
-          @keyframes logoGlow {
-            0%, 100% { box-shadow: 0 0 40px rgba(255, 107, 53, 0.6); }
-            50% { box-shadow: 0 0 60px rgba(255, 107, 53, 0.9), 0 0 100px rgba(255, 107, 53, 0.4); }
-          }
-          @keyframes scan {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          @keyframes orbit1 {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          @keyframes orbit2 {
-            from { transform: rotate(360deg); }
-            to { transform: rotate(0deg); }
-          }
-          @keyframes orbit3 {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          @keyframes corePulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
-          }
-          @keyframes neuronPulse {
-            0%, 100% { opacity: 0.4; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
-          }
-          @keyframes synapseFlow {
-            0% { stroke-dasharray: 0 10; }
-            50% { stroke-dasharray: 5 5; }
-            100% { stroke-dasharray: 10 0; }
-          }
-          @keyframes neuralPulse {
-            0%, 100% { opacity: 0.1; }
-            50% { opacity: 0.3; }
-          }
-          @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-          }
-          @keyframes stepPulse {
-            0%, 100% { opacity: 1; transform: scale(1.1); }
-            50% { opacity: 0.7; transform: scale(1.3); }
-          }
-        `}</style>
-      </div>
-    );
-  }
+    } catch (err) {
+      console.error("Error:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center text-white font-[family-name:var(--font-geist-sans)] p-5" 
-         style={{
-           background: "radial-gradient(ellipse at center, #3a1a00 0%, #2a1500 25%, #1f0f00 50%, #150a00 75%, #0a0500 100%)"
-         }}>
-      <div className="text-center max-w-[600px] w-full">
-        <h1 className="text-[3.5rem] font-normal mb-4 tracking-[-0.02em]">
-          Share your project
-        </h1>
-        
-        <div className="text-xl text-white/80 mb-12 flex items-center justify-center gap-2">
-          Show{" "}
-          <div className="w-6 h-6 rounded-md flex items-center justify-center text-sm font-bold text-white" 
-               style={{
-                 background: "linear-gradient(45deg, #ff6b35, #f7931e)"
-               }}>
-            G
-          </div>{" "}
-          Gentura agents your website
-        </div>
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{
+        background: "radial-gradient(ellipse at center, #1a1a2e 0%, #16213e 50%, #0f172a 100%)"
+      }}
+    >
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-orange-600/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex items-center max-w-[450px] mx-auto p-1 rounded-xl border border-white/20 mb-8"
-              style={{
-                background: "rgba(255, 255, 255, 0.1)",
-                backdropFilter: "blur(10px)"
-              }}>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="awesomeproject.com"
-            disabled={loading}
-            className="flex-1 bg-transparent border-none px-5 py-4 text-white text-base outline-none placeholder:text-white/50 h-12 disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={loading || !url.trim()}
-            className="w-12 h-12 rounded-lg border-none flex items-center justify-center cursor-pointer transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_8px_25px_rgba(255,107,53,0.3)] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-            style={{
-              background: "linear-gradient(45deg, #ff6b35, #f7931e)"
-            }}
-          >
-            <div className="w-0 h-0 ml-[2px]" 
-                 style={{
-                   borderLeft: "8px solid white",
-                   borderTop: "6px solid transparent",
-                   borderBottom: "6px solid transparent"
-                 }}>
+      <div className="w-full max-w-md mx-auto relative z-10">
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center space-y-6">
+            <div className="flex items-center justify-center gap-3 mb-8">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center animate-bounce">
+                <span className="text-xl">🚀</span>
+              </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                TractionPilot
+              </h1>
             </div>
-          </button>
-        </form>
 
-        {/* Manual Form when scraping fails */}
-        {showManualForm && (
-          <div className="w-full max-w-[600px] mx-auto p-6 rounded-xl border border-white/20 mb-8"
-               style={{
-                 background: "rgba(255, 255, 255, 0.05)",
-                 backdropFilter: "blur(10px)"
-               }}>
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-semibold mb-2 text-white">Let's get you set up</h2>
-              <p className="text-white/70 mb-4">Failed to get the page. Please enter details manually.</p>
+            <div className="space-y-4">
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
               
-              <div className="flex items-center justify-center gap-2 text-orange-200">
-                <span>✨ Auto-filled from your website</span>
+              <div className="min-h-[60px] flex items-center justify-center">
+                <div className="text-lg text-white/90 font-medium">
+                  {displayText}
+                  {isTyping && <span className="animate-pulse">|</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Form - Only show when not loading and no report */}
+        {!loading && !marketingReport && !showManualForm && (
+          <div className="text-center space-y-8">
+            <div className="flex items-center justify-center gap-3 mb-8">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-2xl shadow-orange-500/25">
+                <span className="text-2xl font-bold">🚀</span>
+              </div>
+              <div className="text-left">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                  TractionPilot
+                </h1>
+                <p className="text-white/60 text-sm">AI Marketing Intelligence</p>
               </div>
             </div>
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              if (productName.trim() && productDescription.trim()) {
-                const manualData = {
-                  url: url,
-                  title: productName,
-                  description: productDescription,
-                  content: productDescription
-                };
+            <div className="space-y-6">
+              <div className="text-left">
+                <h2 className="text-2xl font-semibold text-white mb-2">
+                  Get Your Marketing Strategy
+                </h2>
+                <p className="text-white/70">
+                  Enter your website URL and get a comprehensive AI-powered marketing report in seconds.
+                </p>
+              </div>
 
-                // Generate marketing report for manual data
-                try {
-                  setLoading(true);
-                  const reportResponse = await fetch('/api/marketing-report', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ data: manualData }),
-                  });
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://your-website.com"
+                    className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
+                    required
+                  />
+                </div>
 
-                  const reportResult = await reportResponse.json();
+                <button
+                  type="submit"
+                  disabled={!url.trim()}
+                  className="w-full py-3 px-6 rounded-lg text-white font-medium transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_8px_25px_rgba(255,107,53,0.3)] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  style={{
+                    background: "linear-gradient(45deg, #ff6b35, #f7931e)"
+                  }}
+                >
+                  Analyze Website →
+                </button>
+              </form>
 
-                  if (reportResult.success) {
-                    setMarketingReport(reportResult.report);
-                    setScrapedData(manualData);
-                    setShowManualForm(false);
-                    setError("");
-                  } else {
-                    setError('Failed to generate marketing report. Please try again.');
-                  }
-                } catch (reportError) {
-                  setError('Failed to generate marketing report. Please try again.');
-                } finally {
-                  setLoading(false);
-                }
-              }
-            }} className="space-y-4">
+              {error && (
+                <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                  {error}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Manual Form - Show when automatic scraping fails */}
+        {showManualForm && !loading && !marketingReport && (
+          <div className="text-center space-y-6">
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                <span className="text-xl">✏️</span>
+              </div>
+              <h2 className="text-2xl font-bold text-white">Manual Entry Required</h2>
+            </div>
+
+            <p className="text-white/70 mb-6">
+              We couldn't automatically analyze this website. Please provide some basic information:
+            </p>
+
+            <form onSubmit={handleManualSubmit} className="space-y-4">
               <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">Product Name</label>
                 <input
                   type="text"
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder="Enter your product name"
-                  className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/10 text-white placeholder:text-white/50 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition-colors"
+                  placeholder="Product/Company Name"
+                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">Product Description</label>
                 <textarea
                   value={productDescription}
                   onChange={(e) => setProductDescription(e.target.value)}
-                  placeholder="Describe what your product does and its key features..."
-                  rows={6}
-                  className="w-full px-4 py-3 rounded-lg border border-white/20 bg-white/10 text-white placeholder:text-white/50 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition-colors resize-none"
+                  placeholder="Brief description of what your product/service does..."
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors resize-none"
                   required
                 />
-                <p className="text-xs text-white/50 mt-1">{productDescription.length} / 5000 characters</p>
               </div>
 
               <button
@@ -594,221 +406,321 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* Marketing Report Display */}
-        {marketingReport && scrapedData && (
-          <div className="w-full max-w-[900px] mx-auto space-y-6">
-            {/* Header */}
-            <div className="text-center p-6 rounded-xl border border-orange-500/30"
-                 style={{
-                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.05))",
-                   backdropFilter: "blur(10px)"
-                 }}>
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold text-white"
-                     style={{ background: "linear-gradient(45deg, #ff6b35, #f7931e)" }}>
-                  🚀
-                </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                  Social Media Marketing Plan
-                </h1>
-              </div>
-              <div className="text-lg text-white/90 font-medium">{marketingReport.productName}</div>
-              <div className="text-sm text-orange-200 mt-1">{marketingReport.category}</div>
-            </div>
-
-            {/* User Persona */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">🎯</span> 1. User Persona
-              </h2>
-              <div className="space-y-3 text-white/90">
-                <div><strong className="text-orange-300">Who they are:</strong> {marketingReport.userPersona.demographics}</div>
-                <div><strong className="text-orange-300">Where they hang out:</strong> {marketingReport.userPersona.whereTheyHangOut}</div>
-                <div><strong className="text-orange-300">Mindset:</strong> {marketingReport.userPersona.mindset}</div>
-              </div>
-            </div>
-
-            {/* Pain Points */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">💔</span> 2. Pain Points
-              </h2>
-              <ul className="space-y-2">
-                {marketingReport.painPoints.map((point, index) => (
-                  <li key={index} className="text-white/90 flex items-start gap-2">
-                    <span className="text-orange-400 mt-1">•</span>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Value Proposition */}
-            <div className="p-6 rounded-xl border border-orange-500/30"
-                 style={{
-                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.05))",
-                   backdropFilter: "blur(10px)"
-                 }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">💎</span> 3. Value Proposition
-              </h2>
-              <p className="text-lg font-medium text-orange-100 italic">"{marketingReport.valueProposition}"</p>
-            </div>
-
-            {/* Content Pillars */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">📱</span> 4. Content Pillars
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {marketingReport.contentPillars.map((pillar, index) => (
-                  <div key={index} className="p-4 rounded-lg border border-white/10 bg-white/5">
-                    <h3 className="font-semibold text-orange-300 mb-2">{pillar.pillar}</h3>
-                    <p className="text-white/80 text-sm">{pillar.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Post Types */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">📝</span> 5. Post Types / Formats
-              </h2>
-              <ul className="space-y-2">
-                {marketingReport.postTypes.map((type, index) => (
-                  <li key={index} className="text-white/90 flex items-start gap-2">
-                    <span className="text-orange-400 mt-1">•</span>
-                    {type}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Weekly Calendar */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">📅</span> 6. Weekly Content Calendar
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <strong className="text-orange-300">Mon</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.monday}</span>
-                </div>
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <strong className="text-orange-300">Wed</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.wednesday}</span>
-                </div>
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <strong className="text-orange-300">Fri</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.friday}</span>
-                </div>
-                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                  <strong className="text-orange-300">Sun</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.sunday}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Hashtag Style */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">#️⃣</span> 7. Hashtag & Caption Style
-              </h2>
-              <div className="space-y-3">
-                <div>
-                  <strong className="text-orange-300">Style:</strong> 
-                  <span className="text-white/90 ml-2">{marketingReport.hashtagStyle.tone}</span>
-                </div>
-                <div>
-                  <strong className="text-orange-300">Example hashtags:</strong>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {marketingReport.hashtagStyle.exampleHashtags.map((tag, index) => (
-                      <span key={index} className="px-2 py-1 rounded bg-orange-500/20 text-orange-200 text-sm">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Engagement Strategy */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">🤝</span> 8. Engagement Strategy
-              </h2>
-              <ul className="space-y-2">
-                {marketingReport.engagementStrategy.map((strategy, index) => (
-                  <li key={index} className="text-white/90 flex items-start gap-2">
-                    <span className="text-orange-400 mt-1">•</span>
-                    {strategy}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Metrics */}
-            <div className="p-6 rounded-xl border border-white/20"
-                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">📊</span> 9. Simple Metrics to Track
-              </h2>
-              <ul className="space-y-2">
-                {marketingReport.metricsToTrack.map((metric, index) => (
-                  <li key={index} className="text-white/90 flex items-start gap-2">
-                    <span className="text-orange-400 mt-1">•</span>
-                    {metric}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Key Takeaway */}
-            <div className="p-6 rounded-xl border border-orange-500/30"
-                 style={{
-                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(247, 147, 30, 0.1))",
-                   backdropFilter: "blur(10px)"
-                 }}>
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span className="text-2xl">⚡</span> Takeaway
-              </h2>
-              <p className="text-lg text-orange-100 font-medium">{marketingReport.keyTakeaway}</p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-4 justify-center pt-6">
-              <button 
-                onClick={() => {
-                  setMarketingReport(null);
-                  setScrapedData(null);
-                  setUrl("");
-                  setProductName("");
-                  setProductDescription("");
-                  setShowManualForm(false);
-                  setError("");
-                }}
-                className="px-6 py-3 rounded-lg border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
-                style={{ background: "rgba(255, 255, 255, 0.1)" }}
-              >
-                Analyze Another Site
-              </button>
-              <a 
-                href={scrapedData.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="px-6 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_8px_25px_rgba(255,107,53,0.3)]"
-                style={{ background: "linear-gradient(45deg, #ff6b35, #f7931e)" }}
-              >
-                Visit Website →
-              </a>
-            </div>
+        {error && !showManualForm && (
+          <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3 mt-4">
+            {error}
           </div>
         )}
       </div>
+
+      {/* Marketing Report Display */}
+      {marketingReport && scrapedData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-screen py-8 px-4">
+            <div className="w-full max-w-[1100px] mx-auto">
+              {/* Professional Report Header */}
+              <div className="text-center mb-16 relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-orange-400/5 to-orange-600/10 rounded-3xl blur-3xl"></div>
+                <div className="relative bg-gradient-to-r from-slate-900/60 via-slate-800/40 to-slate-900/60 backdrop-blur-xl border border-orange-500/25 rounded-3xl p-10">
+                  <div className="flex items-center justify-center gap-6 mb-8">
+                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-2xl shadow-orange-500/30">
+                      <span className="text-4xl font-bold text-white">🚀</span>
+                    </div>
+                    <div className="text-left">
+                      <h1 className="text-5xl font-bold bg-gradient-to-r from-orange-300 via-orange-400 to-orange-500 bg-clip-text text-transparent">
+                        Marketing Intelligence Report
+                      </h1>
+                      <p className="text-orange-200/80 text-xl font-medium mt-2">AI-Powered Strategic Analysis</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h2 className="text-3xl font-bold text-white">{marketingReport.productName}</h2>
+                    <div className="inline-flex items-center gap-3 px-6 py-3 bg-orange-500/15 border border-orange-500/30 rounded-full">
+                      <div className="w-3 h-3 bg-orange-400 rounded-full animate-pulse"></div>
+                      <span className="text-orange-300 font-semibold text-lg">{marketingReport.category}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-12">
+                {/* Section 1: Executive Summary */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-emerald-500/25 rounded-2xl p-8 hover:border-emerald-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-500/25">
+                        <span className="text-2xl">📊</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Executive Summary</h2>
+                        <p className="text-emerald-200/70 text-lg">Strategic Overview & Key Insights</p>
+                      </div>
+                    </div>
+                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+                      <p className="text-xl text-emerald-100 font-medium leading-relaxed italic">
+                        "{marketingReport.valueProposition}"
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Audience Analysis */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-blue-600/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-blue-500/25 rounded-2xl p-8 hover:border-blue-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center shadow-xl shadow-blue-500/25">
+                        <span className="text-2xl">🎯</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Audience Analysis</h2>
+                        <p className="text-blue-200/70 text-lg">Understanding Your Target Market</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-blue-200 mb-4">Target Persona</h3>
+                        <div className="space-y-4 text-white/90">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <strong className="text-blue-300 text-lg min-w-[140px]">Demographics:</strong> 
+                            <span className="text-lg">{marketingReport.userPersona.demographics}</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <strong className="text-blue-300 text-lg min-w-[140px]">Platforms:</strong> 
+                            <span className="text-lg">{marketingReport.userPersona.whereTheyHangOut}</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+                            <strong className="text-blue-300 text-lg min-w-[140px]">Mindset:</strong> 
+                            <span className="text-lg leading-relaxed">{marketingReport.userPersona.mindset}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-red-200 mb-4 flex items-center gap-2">
+                          <span>💔</span> Key Pain Points
+                        </h3>
+                        <ul className="space-y-3">
+                          {marketingReport.painPoints.map((point, index) => (
+                            <li key={index} className="text-white/90 flex items-start gap-3 text-lg">
+                              <span className="text-red-400 mt-1 text-xl">•</span>
+                              <span className="leading-relaxed">{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Content Strategy */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-purple-600/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-purple-500/25 rounded-2xl p-8 hover:border-purple-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/25">
+                        <span className="text-2xl">📱</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Content Strategy</h2>
+                        <p className="text-purple-200/70 text-lg">Building Your Content Foundation</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-purple-200 mb-4">Content Pillars</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {marketingReport.contentPillars.map((pillar, index) => (
+                            <div key={index} className="p-5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                              <h4 className="font-bold text-purple-300 mb-3 text-lg">{pillar.pillar}</h4>
+                              <p className="text-white/80 leading-relaxed">{pillar.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-purple-200 mb-4 flex items-center gap-2">
+                          <span>📝</span> Post Types & Formats
+                        </h3>
+                        <ul className="space-y-3">
+                          {marketingReport.postTypes.map((type, index) => (
+                            <li key={index} className="text-white/90 flex items-start gap-3 text-lg">
+                              <span className="text-purple-400 mt-1 text-xl">•</span>
+                              <span className="leading-relaxed">{type}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Publishing Schedule */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-cyan-600/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-cyan-500/25 rounded-2xl p-8 hover:border-cyan-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-xl shadow-cyan-500/25">
+                        <span className="text-2xl">📅</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Publishing Schedule</h2>
+                        <p className="text-cyan-200/70 text-lg">Strategic Content Calendar</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-6">
+                      <h3 className="text-xl font-semibold text-cyan-200 mb-6">Weekly Content Calendar</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                          <div className="flex items-center gap-3 mb-2">
+                            <strong className="text-cyan-300 text-lg">Monday</strong>
+                          </div>
+                          <span className="text-white/90 text-lg">{marketingReport.weeklyCalendar.monday}</span>
+                        </div>
+                        <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                          <div className="flex items-center gap-3 mb-2">
+                            <strong className="text-cyan-300 text-lg">Wednesday</strong>
+                          </div>
+                          <span className="text-white/90 text-lg">{marketingReport.weeklyCalendar.wednesday}</span>
+                        </div>
+                        <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                          <div className="flex items-center gap-3 mb-2">
+                            <strong className="text-cyan-300 text-lg">Friday</strong>
+                          </div>
+                          <span className="text-white/90 text-lg">{marketingReport.weeklyCalendar.friday}</span>
+                        </div>
+                        <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                          <div className="flex items-center gap-3 mb-2">
+                            <strong className="text-cyan-300 text-lg">Sunday</strong>
+                          </div>
+                          <span className="text-white/90 text-lg">{marketingReport.weeklyCalendar.sunday}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 5: Engagement & Growth */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-pink-500/10 to-pink-600/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-pink-500/25 rounded-2xl p-8 hover:border-pink-400/40 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center shadow-xl shadow-pink-500/25">
+                        <span className="text-2xl">🤝</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Engagement & Growth</h2>
+                        <p className="text-pink-200/70 text-lg">Building Community & Tracking Success</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="bg-pink-500/5 border border-pink-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-pink-200 mb-4 flex items-center gap-2">
+                          <span>#️⃣</span> Hashtag & Caption Style
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <strong className="text-pink-300 text-lg min-w-[100px]">Style:</strong> 
+                            <span className="text-white/90 text-lg">{marketingReport.hashtagStyle.tone}</span>
+                          </div>
+                          <div>
+                            <strong className="text-pink-300 text-lg">Example hashtags:</strong>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {marketingReport.hashtagStyle.exampleHashtags.map((tag, index) => (
+                                <span key={index} className="px-3 py-2 rounded-lg bg-pink-500/20 text-pink-200 font-medium">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-pink-500/5 border border-pink-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-pink-200 mb-4">Engagement Tactics</h3>
+                        <ul className="space-y-3">
+                          {marketingReport.engagementStrategy.map((strategy, index) => (
+                            <li key={index} className="text-white/90 flex items-start gap-3 text-lg">
+                              <span className="text-pink-400 mt-1 text-xl">•</span>
+                              <span className="leading-relaxed">{strategy}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-pink-500/5 border border-pink-500/20 rounded-xl p-6">
+                        <h3 className="text-xl font-semibold text-pink-200 mb-4 flex items-center gap-2">
+                          <span>📊</span> Key Metrics to Track
+                        </h3>
+                        <ul className="space-y-3">
+                          {marketingReport.metricsToTrack.map((metric, index) => (
+                            <li key={index} className="text-white/90 flex items-start gap-3 text-lg">
+                              <span className="text-pink-400 mt-1 text-xl">•</span>
+                              <span className="leading-relaxed">{metric}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 6: Key Takeaway */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/15 to-orange-600/15 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
+                  <div className="relative bg-gradient-to-br from-slate-900/80 via-slate-800/60 to-slate-900/80 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-8 hover:border-orange-400/50 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/25">
+                        <span className="text-2xl">⚡</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Key Takeaway</h2>
+                        <p className="text-orange-200/70 text-lg">Your Strategic Action Item</p>
+                      </div>
+                    </div>
+                    <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-6">
+                      <p className="text-xl text-orange-100 font-medium leading-relaxed">{marketingReport.keyTakeaway}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+                  <button 
+                    onClick={() => {
+                      setMarketingReport(null);
+                      setScrapedData(null);
+                      setUrl("");
+                      setProductName("");
+                      setProductDescription("");
+                      setShowManualForm(false);
+                      setError("");
+                    }}
+                    className="px-8 py-4 rounded-xl border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-all duration-300 text-lg font-medium hover:bg-white/5"
+                  >
+                    Analyze Another Website
+                  </button>
+                  <a 
+                    href={scrapedData.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="px-8 py-4 rounded-xl text-white font-medium transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0_12px_30px_rgba(255,107,53,0.4)] text-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500"
+                  >
+                    Visit Website →
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -121,6 +121,9 @@ Make this highly specific and actionable for this particular business. Focus on 
 
     const responseText = response.text;
     console.log('Gemini response received');
+    console.log('=== GEMINI RESPONSE ===');
+    console.log(responseText);
+    console.log('=== END GEMINI RESPONSE ===');
 
     // Parse the JSON response
     let marketingReport;
