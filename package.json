@@ -8,6 +8,7 @@
     "start": "next start --hostname 0.0.0.0 --port 5000"
   },
   "dependencies": {
+    "@google/genai": "^1.17.0",
     "@hookform/resolvers": "^5.2.1",
     "@mozilla/readability": "^0.6.0",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -48,6 +49,7 @@
     "input-otp": "^1.4.2",
     "jsdom": "^26.1.0",
     "lucide-react": "^0.542.0",
+    "mime": "^4.0.7",
     "next": "15.5.2",
     "next-themes": "^0.4.6",
     "playwright": "^1.55.0",
