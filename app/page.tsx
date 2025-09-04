@@ -176,8 +176,8 @@ export default function Onboarding() {
         throw new Error("Failed to generate marketing report");
       }
 
-      const report = await reportResponse.json();
-      setMarketingReport(report);
+      const response = await reportResponse.json();
+      setMarketingReport(response.report || response);
       setProgress(100);
 
     } catch (err) {
@@ -223,8 +223,8 @@ export default function Onboarding() {
         throw new Error("Failed to generate marketing report");
       }
 
-      const report = await reportResponse.json();
-      setMarketingReport(report);
+      const response = await reportResponse.json();
+      setMarketingReport(response.report || response);
       setProgress(100);
       setShowManualForm(false);
 
