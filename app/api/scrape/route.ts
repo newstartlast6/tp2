@@ -148,26 +148,16 @@ async function activelyWaitForContent(page: any, timeout = 25000) {
     }
 
 
-    // --- Active Interaction ---
+    // --- Minimal Interaction ---
     try {
-      // More human-like scrolling
-      await page.evaluate(() => {
-        window.scrollBy(0, Math.floor(Math.random() * 100) + 50);
-      });
-      
-      const viewport = page.viewport();
-      if (viewport) {
-        const randomX = Math.floor(Math.random() * viewport.width * 0.8) + 20;
-        const randomY = Math.floor(Math.random() * viewport.height * 0.8) + 20;
-        
-        console.log(`[activeWait] Moving mouse to ${randomX}, ${randomY} and attempting realistic click.`);
-        await page.mouse.move(randomX, randomY, { steps: 5 });
-        await page.mouse.down();
-        await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
-        await page.mouse.up();
+      // Very light scrolling only, no mouse movements
+      if (Math.random() < 0.3) { // Only scroll 30% of the time
+        await page.evaluate(() => {
+          window.scrollBy(0, Math.floor(Math.random() * 50) + 25);
+        });
       }
     } catch (e) {
-      console.log('[activeWait] Could not simulate interaction, page might be loading or an overlay is blocking clicks.');
+      console.log('[activeWait] Could not scroll, page might be loading.');
     }
     
     // Use randomized delay
