@@ -113,7 +113,27 @@ export default function Onboarding() {
       const result = await response.json();
 
       if (result.success) {
-        setScrapedData(result.data);
+        // Check if the scraped content contains security checkpoint errors
+        const isSecurityCheckpoint = (data: ScrapedData) => {
+          const content = (data.title + ' ' + data.description + ' ' + data.content).toLowerCase();
+          return content.includes('failed to verify your browser') ||
+                 content.includes('vercel security checkpoint') ||
+                 content.includes('cloudflare') ||
+                 content.includes('checking your browser') ||
+                 content.includes('security check') ||
+                 content.includes('bot protection') ||
+                 content.includes('access denied') ||
+                 content.includes('rate limit') ||
+                 content.includes('code 11') ||
+                 content.includes('code 21');
+        };
+
+        if (isSecurityCheckpoint(result.data)) {
+          setError('This website has security protection that prevents automatic access. Please enter your project details manually.');
+          setShowManualForm(true);
+        } else {
+          setScrapedData(result.data);
+        }
       } else {
         setError(result.error || 'Failed to scrape the website');
         setShowManualForm(true);
