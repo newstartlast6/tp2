@@ -119,12 +119,8 @@ Make this highly specific and actionable for this particular business. Focus on 
       contents,
     });
 
-    if (!response) {
-      throw new Error('No response from Gemini API');
-    }
-
-    const responseText = await response.text();
-    console.log('Gemini response received:', responseText.substring(0, 200) + '...');
+    const responseText = response.text();
+    console.log('Gemini response received');
 
     // Parse the JSON response
     let marketingReport;
