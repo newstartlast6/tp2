@@ -9,11 +9,42 @@ interface ScrapedData {
   content: string;
 }
 
+interface MarketingReport {
+  productName: string;
+  category: string;
+  userPersona: {
+    demographics: string;
+    whereTheyHangOut: string;
+    mindset: string;
+  };
+  painPoints: string[];
+  valueProposition: string;
+  contentPillars: Array<{
+    pillar: string;
+    description: string;
+  }>;
+  postTypes: string[];
+  weeklyCalendar: {
+    monday: string;
+    wednesday: string;
+    friday: string;
+    sunday: string;
+  };
+  hashtagStyle: {
+    tone: string;
+    exampleHashtags: string[];
+  };
+  engagementStrategy: string[];
+  metricsToTrack: string[];
+  keyTakeaway: string;
+}
+
 export default function Onboarding() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null);
+  const [marketingReport, setMarketingReport] = useState<MarketingReport | null>(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
@@ -28,8 +59,10 @@ export default function Onboarding() {
     "Extracting content structure...",
     "Processing page metadata...",
     "Understanding your design...",
-    "Evaluating user experience...",
-    "Finalizing analysis..."
+    "Identifying target audience...",
+    "Generating marketing strategy...",
+    "Creating social media plan...",
+    "Finalizing AI report..."
   ];
 
   // Typing animation for messages
@@ -132,7 +165,29 @@ export default function Onboarding() {
           setError('This website has security protection that prevents automatic access. Please enter your project details manually.');
           setShowManualForm(true);
         } else {
-          setScrapedData(result.data);
+          // Generate marketing report with AI
+          try {
+            const reportResponse = await fetch('/api/marketing-report', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ data: result.data }),
+            });
+
+            const reportResult = await reportResponse.json();
+
+            if (reportResult.success) {
+              setMarketingReport(reportResult.report);
+              setScrapedData(result.data);
+            } else {
+              setError('Failed to generate marketing report. Please try again.');
+              setShowManualForm(true);
+            }
+          } catch (reportError) {
+            setError('Failed to generate marketing report. Please try again.');
+            setShowManualForm(true);
+          }
         }
       } else {
         setError(result.error || 'Failed to scrape the website');
@@ -445,17 +500,42 @@ export default function Onboarding() {
               </div>
             </div>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (productName.trim() && productDescription.trim()) {
-                setScrapedData({
+                const manualData = {
                   url: url,
                   title: productName,
                   description: productDescription,
                   content: productDescription
-                });
-                setShowManualForm(false);
-                setError("");
+                };
+
+                // Generate marketing report for manual data
+                try {
+                  setLoading(true);
+                  const reportResponse = await fetch('/api/marketing-report', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ data: manualData }),
+                  });
+
+                  const reportResult = await reportResponse.json();
+
+                  if (reportResult.success) {
+                    setMarketingReport(reportResult.report);
+                    setScrapedData(manualData);
+                    setShowManualForm(false);
+                    setError("");
+                  } else {
+                    setError('Failed to generate marketing report. Please try again.');
+                  }
+                } catch (reportError) {
+                  setError('Failed to generate marketing report. Please try again.');
+                } finally {
+                  setLoading(false);
+                }
               }
             }} className="space-y-4">
               <div>
@@ -514,52 +594,218 @@ export default function Onboarding() {
           </div>
         )}
 
-        {/* Scraped Data Display */}
-        {scrapedData && (
-          <div className="text-left p-6 rounded-lg border border-white/20 max-w-[600px] mx-auto"
-               style={{
-                 background: "rgba(255, 255, 255, 0.05)",
-                 backdropFilter: "blur(10px)"
-               }}>
-            <h2 className="text-2xl font-semibold mb-4 text-white">{scrapedData.title}</h2>
-            
-            <div className="mb-4">
-              <p className="text-sm text-white/60 mb-1">URL:</p>
-              <a href={scrapedData.url} target="_blank" rel="noopener noreferrer" 
-                 className="text-blue-300 hover:text-blue-200 underline break-all">
-                {scrapedData.url}
+        {/* Marketing Report Display */}
+        {marketingReport && scrapedData && (
+          <div className="w-full max-w-[900px] mx-auto space-y-6">
+            {/* Header */}
+            <div className="text-center p-6 rounded-xl border border-orange-500/30"
+                 style={{
+                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.05))",
+                   backdropFilter: "blur(10px)"
+                 }}>
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold text-white"
+                     style={{ background: "linear-gradient(45deg, #ff6b35, #f7931e)" }}>
+                  🚀
+                </div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                  Social Media Marketing Plan
+                </h1>
+              </div>
+              <div className="text-lg text-white/90 font-medium">{marketingReport.productName}</div>
+              <div className="text-sm text-orange-200 mt-1">{marketingReport.category}</div>
+            </div>
+
+            {/* User Persona */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">🎯</span> 1. User Persona
+              </h2>
+              <div className="space-y-3 text-white/90">
+                <div><strong className="text-orange-300">Who they are:</strong> {marketingReport.userPersona.demographics}</div>
+                <div><strong className="text-orange-300">Where they hang out:</strong> {marketingReport.userPersona.whereTheyHangOut}</div>
+                <div><strong className="text-orange-300">Mindset:</strong> {marketingReport.userPersona.mindset}</div>
+              </div>
+            </div>
+
+            {/* Pain Points */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">💔</span> 2. Pain Points
+              </h2>
+              <ul className="space-y-2">
+                {marketingReport.painPoints.map((point, index) => (
+                  <li key={index} className="text-white/90 flex items-start gap-2">
+                    <span className="text-orange-400 mt-1">•</span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Value Proposition */}
+            <div className="p-6 rounded-xl border border-orange-500/30"
+                 style={{
+                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.05))",
+                   backdropFilter: "blur(10px)"
+                 }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">💎</span> 3. Value Proposition
+              </h2>
+              <p className="text-lg font-medium text-orange-100 italic">"{marketingReport.valueProposition}"</p>
+            </div>
+
+            {/* Content Pillars */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">📱</span> 4. Content Pillars
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {marketingReport.contentPillars.map((pillar, index) => (
+                  <div key={index} className="p-4 rounded-lg border border-white/10 bg-white/5">
+                    <h3 className="font-semibold text-orange-300 mb-2">{pillar.pillar}</h3>
+                    <p className="text-white/80 text-sm">{pillar.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Post Types */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">📝</span> 5. Post Types / Formats
+              </h2>
+              <ul className="space-y-2">
+                {marketingReport.postTypes.map((type, index) => (
+                  <li key={index} className="text-white/90 flex items-start gap-2">
+                    <span className="text-orange-400 mt-1">•</span>
+                    {type}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Weekly Calendar */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">📅</span> 6. Weekly Content Calendar
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                  <strong className="text-orange-300">Mon</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.monday}</span>
+                </div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                  <strong className="text-orange-300">Wed</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.wednesday}</span>
+                </div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                  <strong className="text-orange-300">Fri</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.friday}</span>
+                </div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+                  <strong className="text-orange-300">Sun</strong> → <span className="text-white/90">{marketingReport.weeklyCalendar.sunday}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Hashtag Style */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">#️⃣</span> 7. Hashtag & Caption Style
+              </h2>
+              <div className="space-y-3">
+                <div>
+                  <strong className="text-orange-300">Style:</strong> 
+                  <span className="text-white/90 ml-2">{marketingReport.hashtagStyle.tone}</span>
+                </div>
+                <div>
+                  <strong className="text-orange-300">Example hashtags:</strong>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {marketingReport.hashtagStyle.exampleHashtags.map((tag, index) => (
+                      <span key={index} className="px-2 py-1 rounded bg-orange-500/20 text-orange-200 text-sm">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Engagement Strategy */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">🤝</span> 8. Engagement Strategy
+              </h2>
+              <ul className="space-y-2">
+                {marketingReport.engagementStrategy.map((strategy, index) => (
+                  <li key={index} className="text-white/90 flex items-start gap-2">
+                    <span className="text-orange-400 mt-1">•</span>
+                    {strategy}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Metrics */}
+            <div className="p-6 rounded-xl border border-white/20"
+                 style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)" }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">📊</span> 9. Simple Metrics to Track
+              </h2>
+              <ul className="space-y-2">
+                {marketingReport.metricsToTrack.map((metric, index) => (
+                  <li key={index} className="text-white/90 flex items-start gap-2">
+                    <span className="text-orange-400 mt-1">•</span>
+                    {metric}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Key Takeaway */}
+            <div className="p-6 rounded-xl border border-orange-500/30"
+                 style={{
+                   background: "linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(247, 147, 30, 0.1))",
+                   backdropFilter: "blur(10px)"
+                 }}>
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span className="text-2xl">⚡</span> Takeaway
+              </h2>
+              <p className="text-lg text-orange-100 font-medium">{marketingReport.keyTakeaway}</p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4 justify-center pt-6">
+              <button 
+                onClick={() => {
+                  setMarketingReport(null);
+                  setScrapedData(null);
+                  setUrl("");
+                  setProductName("");
+                  setProductDescription("");
+                  setShowManualForm(false);
+                  setError("");
+                }}
+                className="px-6 py-3 rounded-lg border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
+                style={{ background: "rgba(255, 255, 255, 0.1)" }}
+              >
+                Analyze Another Site
+              </button>
+              <a 
+                href={scrapedData.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-6 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_8px_25px_rgba(255,107,53,0.3)]"
+                style={{ background: "linear-gradient(45deg, #ff6b35, #f7931e)" }}
+              >
+                Visit Website →
               </a>
             </div>
-
-            <div className="mb-4">
-              <p className="text-sm text-white/60 mb-1">Description:</p>
-              <p className="text-white/80">{scrapedData.description}</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-white/60 mb-1">Content Preview:</p>
-              <p className="text-white/70 text-sm leading-relaxed">
-                {scrapedData.content.length > 500 
-                  ? `${scrapedData.content.substring(0, 500)}...` 
-                  : scrapedData.content}
-              </p>
-            </div>
-
-            <button 
-              onClick={() => {
-                setScrapedData(null);
-                setUrl("");
-                setProductName("");
-                setProductDescription("");
-                setShowManualForm(false);
-              }}
-              className="mt-4 px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors"
-              style={{
-                background: "rgba(255, 255, 255, 0.1)"
-              }}
-            >
-              Analyze Another Site
-            </button>
           </div>
         )}
       </div>
