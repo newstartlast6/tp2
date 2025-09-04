@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["chromium", "glib", "nss", "nspr", "atk", "gtk3", "pango", "cairo", "alsa-lib", "libxkbcommon", "libdrm", "at-spi2-core", "gdk-pixbuf"]
+packages = ["chromium", "glib", "nss", "nspr", "atk", "gtk3", "pango", "cairo", "alsa-lib", "libxkbcommon", "libdrm", "at-spi2-core", "gdk-pixbuf", "mesa", "libgbm", "cups"]
 
 [[ports]]
 localPort = 5000
